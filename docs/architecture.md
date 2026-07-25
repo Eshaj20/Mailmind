@@ -76,3 +76,13 @@ erDiagram
 - Move sync, embeddings, summaries, and classification into workers.
 - Add idempotency keys around Gmail message imports.
 - Add pagination and filtering before syncing large accounts.
+
+## Week 2 Gmail Surface
+
+- `GET /api/v1/gmail/oauth/authorize`: returns a Google consent URL for the signed-in user.
+- `GET|POST /api/v1/gmail/oauth/callback`: exchanges the OAuth code, stores the encrypted refresh token, and runs the first sync.
+- `POST /api/v1/gmail/sync`: refreshes the access token and re-syncs the connected Gmail account.
+- `GET /api/v1/gmail/accounts`: lists connected Gmail accounts for the current user.
+- `GET /api/v1/gmail/emails`: returns latest persisted emails for dashboard display.
+
+The first-sync path upserts by Gmail account/message IDs so repeated sync runs update existing rows instead of creating duplicates.
