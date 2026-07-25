@@ -19,7 +19,7 @@ Week 1 foundation is scaffolded:
 - Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Pydantic, JWT
 - Frontend: React, TypeScript, Tailwind CSS, React Query, React Router
 - Infrastructure: Docker Compose, Redis, GitHub Actions
-- Planned AI: OpenAI GPT, embeddings, pgvector, RAG-style semantic search
+- Planned AI: OpenAI GPT, embeddings, hybrid Postgres full-text + pgvector search, RAG-style semantic search
 
 ## Quick Start
 
@@ -63,12 +63,12 @@ npm run build
 | --- | --- | --- |
 | 1 | Foundation | Signup, login, database, Dockerized app |
 | 2 | Gmail integration | Google OAuth, refresh token storage, first email sync |
-| 3 | Sync engine | Incremental sync, Redis/Celery workers, retries, logging |
-| 4 | AI layer | Classification, priority, reply detection, thread summaries |
-| 5 | Semantic search | pgvector embeddings and natural-language email search |
-| 6 | Inbox intelligence | Health score, follow-up detection, newsletter cleanup, weekly reports |
-| 7 | Production engineering | Tests, rate limiting, pagination, filtering, monitoring, deployment |
-| 8 | Polish | Dashboard, charts, README diagrams, screenshots, demo video |
+| 3 | Sync engine | Incremental sync, idempotent re-sync, Redis/Celery workers, retries, logging |
+| 4 | AI layer | Labeled eval set, two-stage classification, confidence/model logging, precision/recall/F1 |
+| 5 | Semantic search | Hybrid Postgres full-text + pgvector search with RRF; benchmark vs vector-only and keyword-only |
+| 6 | Inbox intelligence | Health score formula: unread ratio + avg response time + still-mailing-after-unsubscribe count |
+| 7 | Production engineering | Tests, rate limiting, pagination, filtering, monitoring, deployment, cost/token tracking per user |
+| 8 | Polish | Dashboard, charts, README diagrams, eval numbers, benchmark table, screenshots, demo video |
 
 ## Architecture
 
@@ -100,3 +100,4 @@ MailMind/
     workflows/
   docker-compose.yml
 ```
+
