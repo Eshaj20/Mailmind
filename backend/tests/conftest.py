@@ -10,6 +10,8 @@ from sqlalchemy.pool import StaticPool
 
 os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
 os.environ["SECRET_KEY"] = "test-secret-key-at-least-16"
+os.environ["GOOGLE_CLIENT_ID"] = "test-google-client"
+os.environ["GOOGLE_CLIENT_SECRET"] = "test-google-secret"
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
