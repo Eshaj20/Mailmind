@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:8000/api/v1/gmail/oauth/callback"
+    gmail_scopes: str = "openid email profile https://www.googleapis.com/auth/gmail.readonly"
+    gmail_initial_sync_max_results: int = 25
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -21,15 +26,19 @@ class Settings(BaseSettings):
     @classmethod
     def parse_cors_origins(cls, value: str | list[str]) -> str:
         if isinstance(value, list):
-            return ','.join(value)
+            return ",".join(value)
         return value
 
     @property
     def cors_origin_list(self) -> list[str]:
-        if self.cors_origins.strip().startswith('['):
+        if self.cors_origins.strip().startswith("["):
             parsed = json.loads(self.cors_origins)
             return [origin.strip() for origin in parsed if origin.strip()]
-        return [origin.strip() for origin in self.cors_origins.split(',') if origin.strip()]
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def gmail_scope_list(self) -> list[str]:
+        return [scope.strip() for scope in self.gmail_scopes.split() if scope.strip()]
 
 
 @lru_cache
@@ -38,4 +47,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-
