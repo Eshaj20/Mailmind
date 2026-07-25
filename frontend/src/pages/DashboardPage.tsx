@@ -1,18 +1,23 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Brain, LogOut, Mail, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { clearToken, getMe, getToken } from "../api/client";
+import {
+  clearToken,
+  getEmails,
+  getGmailAccounts,
+  getGmailOAuthUrl,
+  getMe,
+  getToken,
+} from "../api/client";
 
-// Milestones for the dashboard page
 const milestones = [
   { label: "Gmail sync", value: "Week 2", icon: Mail },
   { label: "AI classification", value: "Week 4", icon: Brain },
-  { label: "Semantic search", value: "Week 5", icon: Search },
+  { label: "Hybrid search", value: "Week 5", icon: Search },
   { label: "Inbox intelligence", value: "Week 6", icon: Sparkles },
 ];
 
-// DashboardPage component for displaying user dashboard and milestones
 export function DashboardPage() {
   const navigate = useNavigate();
   const hasToken = Boolean(getToken());
@@ -21,6 +26,24 @@ export function DashboardPage() {
     queryFn: getMe,
     enabled: hasToken,
     retry: false,
+  });
+  const accountsQuery = useQuery({
+    queryKey: ["gmail-accounts"],
+    queryFn: getGmailAccounts,
+    enabled: hasToken,
+    retry: false,
+  });
+  const emailsQuery = useQuery({
+    queryKey: ["emails"],
+    queryFn: getEmails,
+    enabled: hasToken && Boolean(accountsQuery.data?.length),
+    retry: false,
+  });
+  const connectMutation = useMutation({
+    mutationFn: getGmailOAuthUrl,
+    onSuccess: (data) => {
+      window.location.href = data.authorization_url;
+    },
   });
 
   if (!hasToken) {
@@ -44,6 +67,8 @@ export function DashboardPage() {
       </main>
     );
   }
+
+  const connectedAccount = accountsQuery.data?.[0];
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -71,7 +96,7 @@ export function DashboardPage() {
 
       <section className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-lg border border-slate-200 bg-white p-6">
-          <h2 className="text-xl font-semibold text-ink">Week 1 foundation</h2>
+          <h2 className="text-xl font-semibold text-ink">Week 2 Gmail integration</h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             {milestones.map((item) => (
               <div key={item.label} className="rounded-lg border border-slate-200 p-4">
@@ -84,21 +109,47 @@ export function DashboardPage() {
         </div>
 
         <aside className="rounded-lg border border-slate-200 bg-white p-6">
-          <h2 className="text-xl font-semibold text-ink">Next build target</h2>
+          <h2 className="text-xl font-semibold text-ink">
+            {connectedAccount ? "Gmail connected" : "Connect Gmail"}
+          </h2>
           <p className="mt-3 text-slate-600">
-            Add Google OAuth, store refresh tokens securely, then persist the first Gmail sync into
-            PostgreSQL.
+            {connectedAccount
+              ? `${connectedAccount.google_email} is ready for first-sync and re-sync testing.`
+              : "Start Google OAuth, store the refresh token securely, and persist the first Gmail sync."}
           </p>
+          {connectMutation.isError && (
+            <p className="mt-4 rounded-lg bg-coral/10 px-4 py-3 text-sm text-coral">
+              {connectMutation.error.message}
+            </p>
+          )}
           <button
-            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-3 font-semibold text-ink"
+            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 font-semibold text-white hover:bg-moss disabled:cursor-not-allowed disabled:opacity-60"
             type="button"
-            disabled
+            disabled={connectMutation.isPending}
+            onClick={() => connectMutation.mutate()}
           >
             <Mail size={18} aria-hidden />
-            Connect Gmail
+            {connectedAccount ? "Reconnect Gmail" : connectMutation.isPending ? "Opening Google..." : "Connect Gmail"}
           </button>
         </aside>
       </section>
+
+      {connectedAccount && (
+        <section className="mx-auto max-w-6xl px-6 pb-8">
+          <div className="rounded-lg border border-slate-200 bg-white p-6">
+            <h2 className="text-xl font-semibold text-ink">Latest synced emails</h2>
+            <div className="mt-5 divide-y divide-slate-100">
+              {(emailsQuery.data ?? []).map((email) => (
+                <div key={email.id} className="py-4">
+                  <p className="font-semibold text-ink">{email.subject ?? "No subject"}</p>
+                  <p className="mt-1 text-sm text-slate-500">{email.sender ?? "Unknown sender"}</p>
+                  <p className="mt-2 text-sm text-slate-600">{email.snippet}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
     </main>
   );
 }

@@ -1,14 +1,12 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 const TOKEN_KEY = "mailmind_token";
 
-// TypeScript types for API payloads and responses
 export type SignupPayload = {
   email: string;
   password: string;
   full_name?: string;
 };
 
-// TypeScript type for user data returned from the API
 export type User = {
   id: number;
   email: string;
@@ -16,7 +14,26 @@ export type User = {
   is_active: boolean;
 };
 
-//
+export type GmailAccount = {
+  id: number;
+  google_email: string;
+  history_id: string | null;
+  sync_status: string;
+  last_synced_at: string | null;
+};
+
+export type Email = {
+  id: number;
+  gmail_message_id: string;
+  sender: string | null;
+  recipients: string | null;
+  subject: string | null;
+  snippet: string | null;
+  labels: string[] | null;
+  is_read: boolean;
+  received_at: string | null;
+};
+
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -73,4 +90,16 @@ export async function login(email: string, password: string) {
 
 export async function getMe() {
   return request<User>("/auth/me");
+}
+
+export async function getGmailOAuthUrl() {
+  return request<{ authorization_url: string }>("/gmail/oauth/authorize");
+}
+
+export async function getGmailAccounts() {
+  return request<GmailAccount[]>("/gmail/accounts");
+}
+
+export async function getEmails() {
+  return request<Email[]>("/gmail/emails?limit=5");
 }
