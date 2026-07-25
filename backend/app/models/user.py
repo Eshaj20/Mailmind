@@ -1,11 +1,11 @@
 from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 
-# User model representing a user in the database
+
 class User(Base):
     __tablename__ = "users"
 
@@ -19,3 +19,5 @@ class User(Base):
         default=lambda: datetime.now(UTC),
         nullable=False,
     )
+
+    gmail_accounts = relationship("GmailAccount", back_populates="user", cascade="all, delete-orphan")
