@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.user import User
 from app.services.gmail import GmailClient
+from app.services.sync_queue import SyncJobQueue
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/login")
 
@@ -23,6 +24,10 @@ def get_db() -> Generator[Session, None, None]:
 
 def get_gmail_client() -> GmailClient:
     return GmailClient()
+
+
+def get_sync_queue() -> SyncJobQueue:
+    return SyncJobQueue()
 
 
 def get_current_user(

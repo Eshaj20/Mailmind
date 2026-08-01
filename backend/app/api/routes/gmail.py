@@ -2,19 +2,28 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db, get_gmail_client
+from app.api.deps import get_current_user, get_db, get_gmail_client, get_sync_queue
 from app.core.config import settings
 from app.models.gmail import Email, GmailAccount
+from app.models.sync_job import SyncJob
 from app.models.user import User
-from app.schemas.gmail import EmailRead, GmailAccountRead, GmailOAuthCallback, GmailOAuthUrl, GmailSyncResult
+from app.schemas.gmail import (
+    EmailRead,
+    GmailAccountRead,
+    GmailOAuthCallback,
+    GmailOAuthUrl,
+    GmailSyncResult,
+    SyncJobRead,
+)
 from app.services.gmail import (
     GmailClient,
     create_oauth_state,
     parse_oauth_state,
-    sync_account_with_refresh_token,
     sync_latest_messages,
     upsert_gmail_account,
 )
+from app.services.sync_jobs import create_sync_job
+from app.services.sync_queue import SyncJobQueue
 
 router = APIRouter()
 
@@ -64,13 +73,13 @@ def list_accounts(
     return list(db.scalars(select(GmailAccount).where(GmailAccount.user_id == current_user.id)))
 
 
-@router.post("/sync", response_model=GmailSyncResult)
-def sync_first_account(
+@router.post("/sync", response_model=SyncJobRead, status_code=status.HTTP_202_ACCEPTED)
+def queue_sync(
     account_id: int | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    client: GmailClient = Depends(get_gmail_client),
-) -> GmailSyncResult:
+    queue: SyncJobQueue = Depends(get_sync_queue),
+) -> SyncJob:
     query = select(GmailAccount).where(GmailAccount.user_id == current_user.id)
     if account_id is not None:
         query = query.where(GmailAccount.id == account_id)
@@ -78,16 +87,41 @@ def sync_first_account(
     if account is None:
         raise HTTPException(status_code=404, detail="Gmail account not connected")
 
-    stats = sync_account_with_refresh_token(
-        db=db,
-        user=current_user,
-        account=account,
-        client=client,
-        max_results=settings.gmail_initial_sync_max_results,
-    )
+    job = create_sync_job(db, current_user, account)
     db.commit()
-    db.refresh(account)
-    return GmailSyncResult(account=account, **stats.__dict__)
+    db.refresh(job)
+    celery_task_id = queue.enqueue(job.id)
+    if celery_task_id:
+        job.celery_task_id = celery_task_id
+        db.commit()
+        db.refresh(job)
+    return job
+
+
+@router.get("/sync/jobs", response_model=list[SyncJobRead])
+def list_sync_jobs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[SyncJob]:
+    return list(
+        db.scalars(
+            select(SyncJob)
+            .where(SyncJob.user_id == current_user.id)
+            .order_by(desc(SyncJob.created_at), desc(SyncJob.id))
+        )
+    )
+
+
+@router.get("/sync/jobs/{job_id}", response_model=SyncJobRead)
+def get_sync_job(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SyncJob:
+    job = db.scalar(select(SyncJob).where(SyncJob.id == job_id, SyncJob.user_id == current_user.id))
+    if job is None:
+        raise HTTPException(status_code=404, detail="Sync job not found")
+    return job
 
 
 @router.get("/emails", response_model=list[EmailRead])
