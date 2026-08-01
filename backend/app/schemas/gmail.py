@@ -41,3 +41,24 @@ class GmailSyncResult(BaseModel):
     synced_count: int
     created_count: int
     updated_count: int
+
+
+class SyncJobRead(BaseModel):
+    id: int
+    user_id: int
+    gmail_account_id: int
+    job_type: str
+    status: str
+    attempt_count: int
+    max_attempts: int
+    synced_count: int
+    created_count: int
+    updated_count: int
+    celery_task_id: str | None
+    error_type: str | None
+    error_message: str | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
