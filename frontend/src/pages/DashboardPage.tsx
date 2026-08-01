@@ -1,5 +1,5 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Brain, LogOut, Mail, Search, ShieldCheck, Sparkles } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Brain, LogOut, Mail, RefreshCw, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 import {
@@ -8,11 +8,14 @@ import {
   getGmailAccounts,
   getGmailOAuthUrl,
   getMe,
+  getSyncJobs,
   getToken,
+  queueGmailSync,
 } from "../api/client";
 
 const milestones = [
   { label: "Gmail sync", value: "Week 2", icon: Mail },
+  { label: "Sync engine", value: "Week 3", icon: RefreshCw },
   { label: "AI classification", value: "Week 4", icon: Brain },
   { label: "Hybrid search", value: "Week 5", icon: Search },
   { label: "Inbox intelligence", value: "Week 6", icon: Sparkles },
@@ -20,6 +23,7 @@ const milestones = [
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const hasToken = Boolean(getToken());
   const meQuery = useQuery({
     queryKey: ["me"],
@@ -39,10 +43,24 @@ export function DashboardPage() {
     enabled: hasToken && Boolean(accountsQuery.data?.length),
     retry: false,
   });
+  const syncJobsQuery = useQuery({
+    queryKey: ["sync-jobs"],
+    queryFn: getSyncJobs,
+    enabled: hasToken && Boolean(accountsQuery.data?.length),
+    retry: false,
+    refetchInterval: 5000,
+  });
   const connectMutation = useMutation({
     mutationFn: getGmailOAuthUrl,
     onSuccess: (data) => {
       window.location.href = data.authorization_url;
+    },
+  });
+  const syncMutation = useMutation({
+    mutationFn: (accountId: number | undefined) => queueGmailSync(accountId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sync-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
     },
   });
 
@@ -69,6 +87,7 @@ export function DashboardPage() {
   }
 
   const connectedAccount = accountsQuery.data?.[0];
+  const latestJob = syncJobsQuery.data?.[0];
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -96,7 +115,7 @@ export function DashboardPage() {
 
       <section className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-lg border border-slate-200 bg-white p-6">
-          <h2 className="text-xl font-semibold text-ink">Week 2 Gmail integration</h2>
+          <h2 className="text-xl font-semibold text-ink">Week 3 sync engine</h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             {milestones.map((item) => (
               <div key={item.label} className="rounded-lg border border-slate-200 p-4">
@@ -114,23 +133,45 @@ export function DashboardPage() {
           </h2>
           <p className="mt-3 text-slate-600">
             {connectedAccount
-              ? `${connectedAccount.google_email} is ready for first-sync and re-sync testing.`
+              ? `${connectedAccount.google_email} is ready for background re-sync jobs.`
               : "Start Google OAuth, store the refresh token securely, and persist the first Gmail sync."}
           </p>
-          {connectMutation.isError && (
+          {(connectMutation.isError || syncMutation.isError) && (
             <p className="mt-4 rounded-lg bg-coral/10 px-4 py-3 text-sm text-coral">
-              {connectMutation.error.message}
+              {connectMutation.error?.message ?? syncMutation.error?.message}
             </p>
           )}
-          <button
-            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 font-semibold text-white hover:bg-moss disabled:cursor-not-allowed disabled:opacity-60"
-            type="button"
-            disabled={connectMutation.isPending}
-            onClick={() => connectMutation.mutate()}
-          >
-            <Mail size={18} aria-hidden />
-            {connectedAccount ? "Reconnect Gmail" : connectMutation.isPending ? "Opening Google..." : "Connect Gmail"}
-          </button>
+          <div className="mt-6 grid gap-3">
+            <button
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 font-semibold text-white hover:bg-moss disabled:cursor-not-allowed disabled:opacity-60"
+              type="button"
+              disabled={connectMutation.isPending}
+              onClick={() => connectMutation.mutate()}
+            >
+              <Mail size={18} aria-hidden />
+              {connectedAccount ? "Reconnect Gmail" : connectMutation.isPending ? "Opening Google..." : "Connect Gmail"}
+            </button>
+            {connectedAccount && (
+              <button
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-3 font-semibold text-ink hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+                disabled={syncMutation.isPending}
+                onClick={() => syncMutation.mutate(connectedAccount.id)}
+              >
+                <RefreshCw size={18} aria-hidden />
+                {syncMutation.isPending ? "Queueing sync..." : "Queue sync"}
+              </button>
+            )}
+          </div>
+          {latestJob && (
+            <div className="mt-5 rounded-lg border border-slate-200 p-4 text-sm">
+              <p className="font-semibold text-ink">Latest sync: {latestJob.status}</p>
+              <p className="mt-1 text-slate-500">
+                {latestJob.created_count} created, {latestJob.updated_count} updated, attempt {latestJob.attempt_count}
+                /{latestJob.max_attempts}
+              </p>
+            </div>
+          )}
         </aside>
       </section>
 

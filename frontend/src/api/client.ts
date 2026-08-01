@@ -34,6 +34,25 @@ export type Email = {
   received_at: string | null;
 };
 
+export type SyncJob = {
+  id: number;
+  user_id: number;
+  gmail_account_id: number;
+  job_type: string;
+  status: string;
+  attempt_count: number;
+  max_attempts: number;
+  synced_count: number;
+  created_count: number;
+  updated_count: number;
+  celery_task_id: string | null;
+  error_type: string | null;
+  error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+};
+
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -102,4 +121,13 @@ export async function getGmailAccounts() {
 
 export async function getEmails() {
   return request<Email[]>("/gmail/emails?limit=5");
+}
+
+export async function queueGmailSync(accountId?: number) {
+  const suffix = accountId ? `?account_id=${accountId}` : "";
+  return request<SyncJob>(`/gmail/sync${suffix}`, { method: "POST" });
+}
+
+export async function getSyncJobs() {
+  return request<SyncJob[]>("/gmail/sync/jobs");
 }
