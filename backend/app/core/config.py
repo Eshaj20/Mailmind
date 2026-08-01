@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://localhost:8000/api/v1/gmail/oauth/callback"
     gmail_scopes: str = "openid email profile https://www.googleapis.com/auth/gmail.readonly"
     gmail_initial_sync_max_results: int = 25
+    redis_url: str = "redis://redis:6379/0"
+    celery_broker_url: str = "redis://redis:6379/0"
+    celery_result_backend: str = "redis://redis:6379/1"
+    sync_job_max_attempts: int = 3
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

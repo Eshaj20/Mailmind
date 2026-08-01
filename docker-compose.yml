@@ -35,6 +35,20 @@ services:
     volumes:
       - ./backend:/app
 
+  worker:
+    build:
+      context: ./backend
+    command: celery -A app.core.celery_app.celery_app worker --loglevel=INFO
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+
   frontend:
     build:
       context: ./frontend
@@ -50,3 +64,4 @@ services:
 
 volumes:
   postgres_data:
+
