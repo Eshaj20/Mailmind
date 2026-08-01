@@ -27,8 +27,10 @@ Replace full fetches with Gmail `historyId` incremental sync and move long-runni
 
 Deliverables:
 
-- Async worker process
-- Retry mechanism
+- Redis/Celery async worker process
+- Sync job status tracking for queued, running, retrying, succeeded, and failed states
+- Retry mechanism for temporary Google API failures
+- Incremental sync using Gmail history IDs
 - Idempotent re-sync with no duplicate rows on re-run
 - Structured logging
 
@@ -92,3 +94,4 @@ Deliverables:
 - Evaluation numbers and benchmark table in the README
 - Screenshots and demo video
 - Deployment guide
+

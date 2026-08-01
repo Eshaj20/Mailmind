@@ -4,25 +4,29 @@ MailMind is a production-style AI email cleaner and inbox intelligence app. The 
 
 ## Current Milestone
 
-Week 2 Gmail integration is scaffolded:
+Week 3 production sync engine is scaffolded:
 
 - FastAPI backend with health, signup, login, and `/me`
 - SQLAlchemy models and Alembic setup
 - JWT auth with password hashing
 - React frontend with auth and dashboard screens
-- Docker Compose for backend, frontend, PostgreSQL, and Redis
+- Docker Compose for backend, frontend, worker, PostgreSQL, and Redis
 - Backend tests for signup, login, and authenticated user lookup
 - CI workflow for backend tests and frontend build
 - Google OAuth URL and callback endpoints
 - Encrypted Gmail refresh-token storage
 - Gmail accounts, threads, and emails persisted in PostgreSQL
 - Idempotent first sync with no duplicate email rows on re-run
+- Redis/Celery background worker service for Gmail re-sync jobs
+- Sync job tracking with queued, running, retrying, succeeded, and failed states
+- Incremental re-sync path using Gmail history IDs
+- Retry classification for temporary Google API failures
 
 ## Tech Stack
 
-- Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Pydantic, JWT, Gmail API
+- Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Pydantic, JWT, Gmail API, Celery
 - Frontend: React, TypeScript, Tailwind CSS, React Query, React Router
-- Infrastructure: Docker Compose, Redis, GitHub Actions, encrypted token storage
+- Infrastructure: Docker Compose, Redis, Celery workers, GitHub Actions, encrypted token storage
 - Planned AI: OpenAI GPT, embeddings, hybrid Postgres full-text + pgvector search, RAG-style semantic search
 
 ## Quick Start
@@ -104,5 +108,7 @@ MailMind/
     workflows/
   docker-compose.yml
 ```
+
+
 
 
