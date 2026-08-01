@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+import logging
 from typing import Any
 from urllib.parse import urlencode
 
@@ -18,6 +19,10 @@ GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
 OAUTH_STATE_PURPOSE = "gmail_oauth"
+RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+PERMANENT_STATUS_CODES = {400, 401, 403, 404}
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -35,10 +40,28 @@ class GmailMessage:
 
 
 @dataclass(frozen=True)
+class GmailMessageBatch:
+    messages: list[GmailMessage]
+    history_id: str | None
+
+
+@dataclass(frozen=True)
 class GmailSyncStats:
     synced_count: int
     created_count: int
     updated_count: int
+
+
+class GmailSyncError(Exception):
+    error_type = "gmail_sync_error"
+
+
+class TransientGmailSyncError(GmailSyncError):
+    error_type = "transient_gmail_error"
+
+
+class PermanentGmailSyncError(GmailSyncError):
+    error_type = "permanent_gmail_error"
 
 
 def create_oauth_state(user_id: int) -> str:
@@ -74,64 +97,123 @@ class GmailClient:
         return f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
 
     def exchange_code(self, code: str) -> dict[str, Any]:
-        response = httpx.post(
-            GOOGLE_TOKEN_URL,
-            data={
-                "code": code,
-                "client_id": self.config.google_client_id,
-                "client_secret": self.config.google_client_secret,
-                "redirect_uri": self.config.google_redirect_uri,
-                "grant_type": "authorization_code",
-            },
-            timeout=15,
-        )
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = httpx.post(
+                GOOGLE_TOKEN_URL,
+                data={
+                    "code": code,
+                    "client_id": self.config.google_client_id,
+                    "client_secret": self.config.google_client_secret,
+                    "redirect_uri": self.config.google_redirect_uri,
+                    "grant_type": "authorization_code",
+                },
+                timeout=15,
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as exc:
+            raise classify_gmail_exception(exc) from exc
 
     def refresh_access_token(self, refresh_token: str) -> str:
-        response = httpx.post(
-            GOOGLE_TOKEN_URL,
-            data={
-                "client_id": self.config.google_client_id,
-                "client_secret": self.config.google_client_secret,
-                "refresh_token": refresh_token,
-                "grant_type": "refresh_token",
-            },
-            timeout=15,
-        )
-        response.raise_for_status()
-        return str(response.json()["access_token"])
+        try:
+            response = httpx.post(
+                GOOGLE_TOKEN_URL,
+                data={
+                    "client_id": self.config.google_client_id,
+                    "client_secret": self.config.google_client_secret,
+                    "refresh_token": refresh_token,
+                    "grant_type": "refresh_token",
+                },
+                timeout=15,
+            )
+            response.raise_for_status()
+            return str(response.json()["access_token"])
+        except Exception as exc:
+            raise classify_gmail_exception(exc) from exc
 
     def fetch_profile(self, access_token: str) -> dict[str, Any]:
-        response = httpx.get(
-            f"{GMAIL_API_BASE}/profile",
-            headers={"Authorization": f"Bearer {access_token}"},
-            timeout=15,
-        )
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = httpx.get(
+                f"{GMAIL_API_BASE}/profile",
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=15,
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as exc:
+            raise classify_gmail_exception(exc) from exc
 
     def fetch_latest_messages(self, access_token: str, max_results: int) -> list[GmailMessage]:
-        list_response = httpx.get(
-            f"{GMAIL_API_BASE}/messages",
-            headers={"Authorization": f"Bearer {access_token}"},
-            params={"maxResults": max_results, "q": "newer_than:30d"},
-            timeout=15,
-        )
-        list_response.raise_for_status()
-        message_refs = list_response.json().get("messages", [])
+        try:
+            list_response = httpx.get(
+                f"{GMAIL_API_BASE}/messages",
+                headers={"Authorization": f"Bearer {access_token}"},
+                params={"maxResults": max_results, "q": "newer_than:30d"},
+                timeout=15,
+            )
+            list_response.raise_for_status()
+            message_refs = list_response.json().get("messages", [])
+            return [self.fetch_message(access_token, item["id"]) for item in message_refs]
+        except GmailSyncError:
+            raise
+        except Exception as exc:
+            raise classify_gmail_exception(exc) from exc
 
-        messages: list[GmailMessage] = []
-        for item in message_refs:
-            message_response = httpx.get(
-                f"{GMAIL_API_BASE}/messages/{item['id']}",
+    def fetch_history_messages(self, access_token: str, start_history_id: str, max_results: int) -> GmailMessageBatch:
+        try:
+            response = httpx.get(
+                f"{GMAIL_API_BASE}/history",
+                headers={"Authorization": f"Bearer {access_token}"},
+                params={
+                    "startHistoryId": start_history_id,
+                    "historyTypes": "messageAdded",
+                    "maxResults": max_results,
+                },
+                timeout=15,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            message_ids: list[str] = []
+            for history in payload.get("history", []):
+                for added in history.get("messagesAdded", []):
+                    message_id = added.get("message", {}).get("id")
+                    if message_id and message_id not in message_ids:
+                        message_ids.append(message_id)
+            return GmailMessageBatch(
+                messages=[self.fetch_message(access_token, message_id) for message_id in message_ids],
+                history_id=str(payload.get("historyId")) if payload.get("historyId") else None,
+            )
+        except GmailSyncError:
+            raise
+        except Exception as exc:
+            raise classify_gmail_exception(exc) from exc
+
+    def fetch_message(self, access_token: str, message_id: str) -> GmailMessage:
+        try:
+            response = httpx.get(
+                f"{GMAIL_API_BASE}/messages/{message_id}",
                 headers={"Authorization": f"Bearer {access_token}"},
                 params={"format": "metadata", "metadataHeaders": ["From", "To", "Subject", "Date"]},
                 timeout=15,
             )
-            message_response.raise_for_status()
-            messages.append(parse_gmail_message(message_response.json()))
-        return messages
+            response.raise_for_status()
+            return parse_gmail_message(response.json())
+        except Exception as exc:
+            raise classify_gmail_exception(exc) from exc
+
+
+def classify_gmail_exception(exc: Exception) -> GmailSyncError:
+    if isinstance(exc, GmailSyncError):
+        return exc
+    if isinstance(exc, httpx.HTTPStatusError):
+        status_code = exc.response.status_code
+        if status_code in RETRYABLE_STATUS_CODES:
+            return TransientGmailSyncError(f"Google API returned retryable status {status_code}")
+        if status_code in PERMANENT_STATUS_CODES:
+            return PermanentGmailSyncError(f"Google API returned permanent status {status_code}")
+    if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
+        return TransientGmailSyncError("Temporary Google API transport failure")
+    return PermanentGmailSyncError(str(exc) or exc.__class__.__name__)
 
 
 def parse_gmail_message(payload: dict[str, Any]) -> GmailMessage:
@@ -247,8 +329,10 @@ def sync_latest_messages(
             )
             db.add(email)
             created_count += 1
+            event_name = "sync.message_created"
         else:
             updated_count += 1
+            event_name = "sync.message_updated"
 
         email.thread_id = thread.id
         email.sender = message.sender
@@ -260,6 +344,15 @@ def sync_latest_messages(
         email.is_read = "UNREAD" not in message.labels
         email.received_at = message.received_at
         latest_history_id = message.history_id or latest_history_id
+        logger.info(
+            event_name,
+            extra={
+                "user_id": user.id,
+                "gmail_account_id": account.id,
+                "gmail_message_id": message.gmail_message_id,
+                "gmail_thread_id": message.gmail_thread_id,
+            },
+        )
 
     account.history_id = latest_history_id
     account.last_synced_at = datetime.now(UTC)
@@ -272,10 +365,29 @@ def sync_latest_messages(
     )
 
 
-def _as_utc(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value.astimezone(UTC)
+def sync_gmail_account(
+    db: Session,
+    user: User,
+    account: GmailAccount,
+    client: GmailClient,
+    max_results: int,
+) -> GmailSyncStats:
+    refresh_token = decrypt_value(account.refresh_token_ciphertext)
+    access_token = client.refresh_access_token(refresh_token)
+    if account.history_id:
+        logger.info(
+            "sync.gmail_history_fetch.started",
+            extra={"user_id": user.id, "gmail_account_id": account.id, "history_id": account.history_id},
+        )
+        batch = client.fetch_history_messages(access_token, account.history_id, max_results=max_results)
+        stats = sync_latest_messages(db, user, account, batch.messages)
+        if batch.history_id:
+            account.history_id = batch.history_id
+        return stats
+
+    logger.info("sync.gmail_initial_fetch.started", extra={"user_id": user.id, "gmail_account_id": account.id})
+    messages = client.fetch_latest_messages(access_token, max_results=max_results)
+    return sync_latest_messages(db, user, account, messages)
 
 
 def sync_account_with_refresh_token(
@@ -285,10 +397,10 @@ def sync_account_with_refresh_token(
     client: GmailClient,
     max_results: int,
 ) -> GmailSyncStats:
-    refresh_token = decrypt_value(account.refresh_token_ciphertext)
-    access_token = client.refresh_access_token(refresh_token)
-    messages = client.fetch_latest_messages(access_token, max_results=max_results)
-    return sync_latest_messages(db, user, account, messages)
+    return sync_gmail_account(db=db, user=user, account=account, client=client, max_results=max_results)
 
 
-
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
