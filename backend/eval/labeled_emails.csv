@@ -1,0 +1,41 @@
+gmail_message_id,sender,subject,snippet,body_preview,label_category,label_priority,label_needs_reply
+seed-001,Priya Recruiter <priya@acmehiring.com>,Interview availability next week,Can we schedule your interview for Tuesday?,"Hi, following up - can we schedule your interview for Tuesday at 2pm?",primary,high,true
+seed-002,Legal <legal@vendorco.com>,Contract needs your signature - action required,Please review and sign the attached contract by Friday.,Action required: please review and sign the attached contract by Friday.,primary,high,true
+seed-003,Sam Teammate <sam@company.com>,Meeting request: sprint planning,Can we meet tomorrow at 10am for sprint planning?,Can we meet tomorrow at 10am for sprint planning?,primary,medium,true
+seed-004,Sam Teammate <sam@company.com>,FYI: deploy went out,Just letting you know the deploy went out fine.,"Just letting you know the deploy went out fine, no action needed.",primary,medium,false
+seed-005,Manager <manager@company.com>,Reminder: report deadline Friday,Reminder: the quarterly report is due Friday.,"Reminder: the quarterly report is due Friday, please submit on time.",primary,high,true
+seed-006,Outlet Store <deals@outletstore.com>,50% off everything this weekend,"Huge sale - 50% off everything, this weekend only.","Huge sale - 50% off everything, this weekend only. Unsubscribe anytime.",promotions,low,false
+seed-007,BigMart <promo@bigmart.com>,Black Friday deal inside,Grab this limited time deal before it's gone.,"Grab this limited time deal before it's gone, use coupon at checkout.",promotions,low,false
+seed-008,Newsletter <newsletter@shopfast.com>,Your weekly discount code,Here is your discount code for this week.,"Here is your discount code for this week, limited time offer.",promotions,low,false
+seed-009,ClearanceCo <sales@clearanceco.com>,Clearance sale - up to 70% off,"Clearance sale going on now, up to 70% off.","Clearance sale going on now, up to 70% off. Unsubscribe here.",promotions,low,false
+seed-010,LinkedIn <notifications@linkedin.com>,Jordan commented on your post,Jordan commented on your post: Great insight!,Jordan commented on your post: Great insight!,social,low,false
+seed-011,Facebook <notification@facebook.com>,You were tagged in a photo,A friend tagged you in a photo.,A friend tagged you in a photo. See it now.,social,low,false
+seed-012,Instagram <no-reply@instagram.com>,You have a new follower,someone_new started following you.,someone_new started following you on Instagram.,social,low,false
+seed-013,Twitter <info@twitter.com>,You were mentioned in a tweet,A user mentioned you in a tweet.,A user mentioned you in a tweet just now.,social,low,false
+seed-014,Amazon <shipment-tracking@amazon.com>,Your order has shipped,Your order has shipped and is on its way.,"Your order has shipped and is on its way, arriving Thursday.",updates,medium,false
+seed-015,Chase Bank <statements@chase.com>,Your statement is ready,Your monthly statement is now available.,Your monthly statement is now available to view online.,updates,medium,false
+seed-016,PaymentsCo <receipts@paymentsco.com>,Payment received - receipt,"We received your payment, receipt attached.","We received your payment, receipt attached for your records.",updates,low,false
+seed-017,City Utilities <billing@cityutilities.com>,Your electricity bill is ready,Your electricity invoice for this month is ready.,"Your electricity invoice for this month is ready, payment due in 10 days.",updates,medium,false
+seed-018,Courier <no-reply@courier.com>,Package delivery notification,Your package delivery is scheduled for today.,Your package delivery is scheduled for today between 2-5pm.,updates,low,false
+seed-019,Prize Center <win@prizecenter.biz>,You've won a prize!,"Congratulations, you've won a prize, claim your prize now.","Congratulations, you've won a prize, claim your prize now before it expires.",spam,low,false
+seed-020,Security Alert <alert@bank-verify.biz>,Urgent: verify your account immediately,"Urgent bank notice, verify your account immediately or it will be locked.","Urgent bank notice, verify your account immediately or it will be locked.",spam,low,false
+seed-021,Lottery Board <claims@lottoclaims.biz>,Lottery winner notification,"You are a lottery winner, claim your prize now.","You are a lottery winner, claim your prize now by replying with your details.",spam,low,false
+seed-022,Alex Friend <alex@example.com>,Hang out this weekend?,"Hey, are you free to hang out this weekend?","Hey, are you free to hang out this weekend? Let me know!",primary,medium,true
+seed-023,Mom <mom@example.com>,Recipe I mentioned,Here is the recipe I mentioned last time.,"Here is the recipe I mentioned last time, hope you like it.",primary,low,false
+seed-024,Shipping <no-reply@shipfast.com>,Tracking number for your order,"Your tracking number is ready, order confirmed.","Your tracking number is ready, order confirmed and on its way.",updates,low,false
+seed-025,Flash Deals <deals@flashdeals.com>,Sale ends today - act now,"Our biggest sale ends today, act now before it's gone.","Our biggest sale ends today, act now before it's gone. Unsubscribe anytime.",promotions,low,false
+seed-026,Instagram <no-reply@instagram.com>,New comment on your photo,someone_new commented on your photo.,someone_new commented on your photo: nice shot!,social,low,false
+seed-027,HR Team <hr@newcompany.com>,Your offer letter - please respond,"Please find attached your offer letter, please respond by Friday.","Please find attached your offer letter, please respond by Friday to confirm.",primary,high,true
+seed-028,Team Lead <lead@company.com>,Weekly digest,"Here is this week's digest, no action needed.","Here is this week's digest, no action needed, just for your awareness.",primary,medium,false
+seed-029,Vendor Billing <billing@vendorco.com>,Invoice attached for August,Invoice attached for services rendered in August.,"Invoice attached for services rendered in August, payment due in 30 days.",updates,medium,false
+seed-030,Prize Center <win@prizecenter.biz>,Claim your prize now,"Click here to claim your prize now, limited time.","Click here to claim your prize now, limited time offer expires soon.",spam,low,false
+seed-031,Dr. Patel Office <appointments@drpatel.com>,Appointment reminder - please confirm,"Reminder: your appointment is Thursday, please confirm attendance.","Reminder: your appointment is Thursday at 3pm, please confirm attendance.",primary,medium,true
+seed-032,FlashMart <deals@flashmart.com>,Flash sale - 30% off today only,"Flash sale today only, 30% off site-wide.","Flash sale today only, 30% off site-wide, use code FLASH30.",promotions,low,false
+seed-033,Instagram <no-reply@instagram.com>,Someone liked your post,someone_new liked your post.,someone_new liked your post just now.,social,low,false
+seed-034,Courier <no-reply@courier.com>,Your package has been delivered,Your package was delivered to your front door.,Your package was delivered to your front door at 1:15pm.,updates,low,false
+seed-035,Ops Lead <ops@company.com>,"Urgent: server down, need your input","Urgent, the production server is down, need your input now.","Urgent, the production server is down, need your input now to fix it.",primary,high,true
+seed-036,Mom <mom@example.com>,Just saying hi,"Just wanted to say hi, hope you're doing well.","Just wanted to say hi, hope you're doing well, talk soon.",primary,low,false
+seed-037,Card Services <statements@cardservices.com>,Your credit card statement is available,Your credit card statement is now available online.,Your credit card statement is now available online to review.,updates,medium,false
+seed-038,CEO Office <ceo.office@company-secure.biz>,Urgent wire transfer needed,"I need you to process an urgent wire transfer today, act now.","I need you to process an urgent wire transfer today, act now, reply to confirm.",spam,low,false
+seed-039,Jamie Colleague <jamie@company.com>,Can we reschedule our call tomorrow?,Can we reschedule our call tomorrow to the afternoon?,Can we reschedule our call tomorrow to the afternoon? Let me know.,primary,medium,true
+seed-040,ShopFast <promo@shopfast.com>,Coupon code inside - 20% off,Here's a coupon code inside for 20% off your next order.,"Here's a coupon code inside for 20% off your next order, unsubscribe anytime.",promotions,low,false
