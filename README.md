@@ -4,14 +4,14 @@ MailMind is a production-style AI email cleaner and inbox intelligence app. The 
 
 ## Current Milestone
 
-Week 3 production sync engine is scaffolded:
+Week 4 AI layer is complete:
 
 - FastAPI backend with health, signup, login, and `/me`
 - SQLAlchemy models and Alembic setup
 - JWT auth with password hashing
-- React frontend with auth and dashboard screens
+- React frontend with auth, dashboard, and inbox intelligence screens
 - Docker Compose for backend, frontend, worker, PostgreSQL, and Redis
-- Backend tests for signup, login, and authenticated user lookup
+- Backend tests for auth, Gmail sync, and AI classification
 - CI workflow for backend tests and frontend build
 - Google OAuth URL and callback endpoints
 - Encrypted Gmail refresh-token storage
@@ -21,6 +21,10 @@ Week 3 production sync engine is scaffolded:
 - Sync job tracking with queued, running, retrying, succeeded, and failed states
 - Incremental re-sync path using Gmail history IDs
 - Retry classification for temporary Google API failures
+- Two-stage AI classification: rule-based pre-filter, then LLM (if configured) or a lightweight local fallback
+- Classification metadata (category, priority, needs_reply, confidence, model_version) stored per email plus an append-only audit log
+- Thread summarization with the same LLM/fallback split
+- Evaluation harness (`scripts/evaluate_classifier.py`) reporting precision/recall/F1 against a labeled dataset, plus `scripts/export_emails_for_labeling.py` to build one from your real inbox
 
 ## Tech Stack
 

@@ -34,18 +34,18 @@ Deliverables:
 - Idempotent re-sync with no duplicate rows on re-run
 - Structured logging
 
-## Week 4: AI Layer
+## Week 4: AI Layer - Done
 
 Hand-label 100-150 real emails, then classify, score priority, detect whether they need a reply, and summarize threads.
 
 Deliverables:
 
-- Labeled evaluation set
-- Two-stage classification: rule-based pre-filter, then LLM/lightweight classifier for the rest
-- Classification logs with confidence and model_version
-- Precision, recall, and F1 report on the labeled set
-- Stored AI metadata
-- Dashboard that shows meaningful email intelligence
+- Labeled evaluation set - `scripts/export_emails_for_labeling.py` exports synced emails to a CSV template; `eval/labeled_emails.csv` ships a 40-row synthetic seed so the harness runs out of the box (swap in 100-150 real hand-labeled emails for a trustworthy report; see `eval/README.md`)
+- Two-stage classification: rule-based pre-filter (`app/services/classification.py::apply_rule_engine`), then LLM (OpenAI, if `OPENAI_API_KEY` is set) or a lightweight local fallback for the rest
+- Classification logs with confidence and model_version - append-only `email_classifications` table
+- Precision, recall, and F1 report on the labeled set - `scripts/evaluate_classifier.py` writes `eval/eval_report.md`
+- Stored AI metadata - `category`, `priority`, `needs_reply`, `classification_confidence`, `classification_model_version`, `classified_at` on `Email`; `summary` on `EmailThread`
+- Dashboard that shows meaningful email intelligence - category/priority breakdown, needs-reply count, thread summaries, and a "Run AI classification" action
 
 ## Week 5: Semantic Search
 
@@ -94,4 +94,5 @@ Deliverables:
 - Evaluation numbers and benchmark table in the README
 - Screenshots and demo video
 - Deployment guide
+
 

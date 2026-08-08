@@ -98,3 +98,18 @@ The first-sync path upserts by Gmail account/message IDs so repeated sync runs u
 - Idempotency: Gmail account/message unique constraints keep re-sync from inserting duplicate rows.
 - Structured log events include `sync.started`, `sync.gmail_history_fetch.started`, `sync.message_created`, `sync.message_updated`, `sync.completed`, `sync.retry_scheduled`, and `sync.failed`.
 
+## Week 4 AI Layer
+
+- `POST /api/v1/gmail/classify`: classifies every not-yet-classified email for the current user and summarizes any threads touched by the run.
+- `GET /api/v1/gmail/classification/summary`: aggregated counts by category/priority plus needs-reply count, for the dashboard.
+- `GET /api/v1/gmail/threads`: lists threads with their latest summary.
+- `POST /api/v1/gmail/threads/{thread_id}/summarize`: re-summarizes a single thread on demand.
+- Pipeline (`app/services/classification.py`):
+  1. **Rule engine** (`apply_rule_engine`) - deterministic keyword/sender-pattern scoring. Returns `None` when unsure, rather than guessing, so ambiguous emails escalate instead of getting a low-quality label.
+  2. **LLM stage** - if `OPENAI_API_KEY` is configured, calls OpenAI's chat completions API for a structured JSON classification.
+  3. **Lightweight fallback** (`apply_lightweight_classifier`) - a dependency-free local scorer used when no LLM is configured or the LLM call fails, so the pipeline always terminates.
+- Every classification writes an append-only row to `email_classifications` (category, priority, needs_reply, confidence, stage, model_version, rationale) and updates a denormalized snapshot on `Email` for fast dashboard reads.
+- Thread summaries follow the same LLM/fallback split and are stored on `EmailThread`.
+- Evaluation: `scripts/export_emails_for_labeling.py` exports synced emails to a CSV for hand-labeling; `scripts/evaluate_classifier.py` runs the pipeline against a labeled CSV and reports precision/recall/F1 per category, priority, and needs_reply into `eval/eval_report.md`.
+
+
