@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.user import User
+from app.services.classification import LLMClient
 from app.services.gmail import GmailClient
 from app.services.sync_queue import SyncJobQueue
 
@@ -28,6 +29,10 @@ def get_gmail_client() -> GmailClient:
 
 def get_sync_queue() -> SyncJobQueue:
     return SyncJobQueue()
+
+
+def get_llm_client() -> LLMClient:
+    return LLMClient()
 
 
 def get_current_user(

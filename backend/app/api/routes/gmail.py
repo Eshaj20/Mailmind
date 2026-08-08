@@ -2,19 +2,23 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db, get_gmail_client, get_sync_queue
+from app.api.deps import get_current_user, get_db, get_gmail_client, get_llm_client, get_sync_queue
 from app.core.config import settings
-from app.models.gmail import Email, GmailAccount
+from app.models.gmail import Email, EmailThread, GmailAccount
 from app.models.sync_job import SyncJob
 from app.models.user import User
 from app.schemas.gmail import (
+    ClassificationBatchRead,
+    ClassificationSummaryRead,
     EmailRead,
     GmailAccountRead,
     GmailOAuthCallback,
     GmailOAuthUrl,
     GmailSyncResult,
     SyncJobRead,
+    ThreadRead,
 )
+from app.services.classification import LLMClient, classify_unclassified_emails, summarize_thread
 from app.services.gmail import (
     GmailClient,
     create_oauth_state,
@@ -138,6 +142,88 @@ def list_emails(
             .limit(limit)
         )
     )
+
+
+@router.post("/classify", response_model=ClassificationBatchRead)
+def classify_emails(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    llm_client: LLMClient = Depends(get_llm_client),
+) -> ClassificationBatchRead:
+    stats = classify_unclassified_emails(db, current_user, llm_client=llm_client)
+    return ClassificationBatchRead(
+        classified_count=stats.classified_count,
+        by_category=stats.by_category or {},
+        by_priority=stats.by_priority or {},
+        needs_reply_count=stats.needs_reply_count,
+        stage_counts=stats.stage_counts or {},
+    )
+
+
+@router.get("/classification/summary", response_model=ClassificationSummaryRead)
+def classification_summary(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ClassificationSummaryRead:
+    classified = list(
+        db.scalars(select(Email).where(Email.user_id == current_user.id, Email.classified_at.isnot(None)))
+    )
+    unclassified_total = len(
+        list(db.scalars(select(Email.id).where(Email.user_id == current_user.id, Email.classified_at.is_(None))))
+    )
+
+    by_category: dict[str, int] = {}
+    by_priority: dict[str, int] = {}
+    needs_reply_count = 0
+    for email in classified:
+        if email.category:
+            by_category[email.category] = by_category.get(email.category, 0) + 1
+        if email.priority:
+            by_priority[email.priority] = by_priority.get(email.priority, 0) + 1
+        if email.needs_reply:
+            needs_reply_count += 1
+
+    return ClassificationSummaryRead(
+        total_classified=len(classified),
+        total_unclassified=unclassified_total,
+        by_category=by_category,
+        by_priority=by_priority,
+        needs_reply_count=needs_reply_count,
+    )
+
+
+@router.get("/threads", response_model=list[ThreadRead])
+def list_threads(
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[EmailThread]:
+    return list(
+        db.scalars(
+            select(EmailThread)
+            .where(EmailThread.user_id == current_user.id)
+            .order_by(desc(EmailThread.last_message_at), desc(EmailThread.id))
+            .limit(limit)
+        )
+    )
+
+
+@router.post("/threads/{thread_id}/summarize", response_model=ThreadRead)
+def summarize_thread_endpoint(
+    thread_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    llm_client: LLMClient = Depends(get_llm_client),
+) -> EmailThread:
+    thread = db.scalar(
+        select(EmailThread).where(EmailThread.id == thread_id, EmailThread.user_id == current_user.id)
+    )
+    if thread is None:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    summarize_thread(db, thread, llm_client=llm_client)
+    db.commit()
+    db.refresh(thread)
+    return thread
 
 
 def _handle_oauth_callback(
