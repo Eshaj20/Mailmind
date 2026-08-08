@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -46,6 +46,9 @@ class EmailThread(Base):
     subject: Mapped[str | None] = mapped_column(String(512), nullable=True)
     snippet: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    summarized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
@@ -80,6 +83,12 @@ class Email(Base):
     labels: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     is_read: Mapped[bool] = mapped_column(default=False, nullable=False)
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    priority: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    needs_reply: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    classification_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    classification_model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    classified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
@@ -95,3 +104,6 @@ class Email(Base):
     user = relationship("User")
     gmail_account = relationship("GmailAccount", back_populates="emails")
     thread = relationship("EmailThread", back_populates="emails")
+    classifications = relationship(
+        "EmailClassification", back_populates="email", cascade="all, delete-orphan"
+    )

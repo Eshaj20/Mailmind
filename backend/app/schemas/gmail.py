@@ -32,6 +32,41 @@ class EmailRead(BaseModel):
     labels: list[str] | None
     is_read: bool
     received_at: datetime | None
+    category: str | None
+    priority: str | None
+    needs_reply: bool | None
+    classification_confidence: float | None
+    classification_model_version: str | None
+    classified_at: datetime | None
+
+    model_config = {"from_attributes": True}
+
+
+class ClassificationBatchRead(BaseModel):
+    classified_count: int
+    by_category: dict[str, int]
+    by_priority: dict[str, int]
+    needs_reply_count: int
+    stage_counts: dict[str, int]
+
+
+class ClassificationSummaryRead(BaseModel):
+    total_classified: int
+    total_unclassified: int
+    by_category: dict[str, int]
+    by_priority: dict[str, int]
+    needs_reply_count: int
+
+
+class ThreadRead(BaseModel):
+    id: int
+    gmail_thread_id: str
+    subject: str | None
+    snippet: str | None
+    last_message_at: datetime | None
+    summary: str | None
+    summary_model_version: str | None
+    summarized_at: datetime | None
 
     model_config = {"from_attributes": True}
 
