@@ -32,6 +32,39 @@ export type Email = {
   labels: string[] | null;
   is_read: boolean;
   received_at: string | null;
+  category: string | null;
+  priority: string | null;
+  needs_reply: boolean | null;
+  classification_confidence: number | null;
+  classification_model_version: string | null;
+  classified_at: string | null;
+};
+
+export type ClassificationBatch = {
+  classified_count: number;
+  by_category: Record<string, number>;
+  by_priority: Record<string, number>;
+  needs_reply_count: number;
+  stage_counts: Record<string, number>;
+};
+
+export type ClassificationSummary = {
+  total_classified: number;
+  total_unclassified: number;
+  by_category: Record<string, number>;
+  by_priority: Record<string, number>;
+  needs_reply_count: number;
+};
+
+export type Thread = {
+  id: number;
+  gmail_thread_id: string;
+  subject: string | null;
+  snippet: string | null;
+  last_message_at: string | null;
+  summary: string | null;
+  summary_model_version: string | null;
+  summarized_at: string | null;
 };
 
 export type SyncJob = {
@@ -130,4 +163,16 @@ export async function queueGmailSync(accountId?: number) {
 
 export async function getSyncJobs() {
   return request<SyncJob[]>("/gmail/sync/jobs");
+}
+
+export async function classifyEmails() {
+  return request<ClassificationBatch>("/gmail/classify", { method: "POST" });
+}
+
+export async function getClassificationSummary() {
+  return request<ClassificationSummary>("/gmail/classification/summary");
+}
+
+export async function getThreads() {
+  return request<Thread[]>("/gmail/threads?limit=10");
 }
