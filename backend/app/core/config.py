@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://redis:6379/0"
     celery_result_backend: str = "redis://redis:6379/1"
     sync_job_max_attempts: int = 3
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
+    classification_rule_confidence_threshold: float = 0.75
+    classification_batch_limit: int = 200
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
