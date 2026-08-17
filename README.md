@@ -83,50 +83,84 @@ npm run build
 | 8 | Polish | Dashboard, charts, README diagrams, eval numbers, benchmark table, screenshots, demo video |
 
 ## Architecture
-
 ```mermaid
-flowchart TD
+flowchart LR
     U[User] --> FE[React + TypeScript Frontend]
 
-    FE -->|Signup / Login| AUTH[FastAPI Auth APIs]
-    AUTH -->|Hash password / verify user| DB[(PostgreSQL)]
-    AUTH -->|Return JWT token| FE
+    subgraph AUTH[Authentication]
+        A1[Signup / Login APIs]
+        A2[Password Hashing]
+        A3[JWT Token]
+    end
 
-    FE -->|Connect Gmail| GMAIL_AUTH[Gmail OAuth Endpoint]
-    GMAIL_AUTH -->|Redirect user| GOOGLE[Google OAuth Consent Screen]
-    GOOGLE -->|OAuth code| CALLBACK[OAuth Callback API]
-    CALLBACK -->|Exchange code for tokens| GOOGLE
-    CALLBACK -->|Encrypt refresh token| SEC[Token Encryption Layer]
-    SEC --> DB
+    subgraph GMAIL[Gmail Connection]
+        G1[OAuth Authorize API]
+        G2[Google Consent Screen]
+        G3[OAuth Callback API]
+        G4[Token Encryption]
+    end
 
-    CALLBACK -->|First email sync| GMAIL_API[Gmail API]
-    GMAIL_API -->|Emails + Threads| SYNC[Email Sync Service]
-    SYNC -->|Upsert users, emails, threads| DB
+    subgraph SYNC[Email Sync Engine]
+        S1[First Sync Service]
+        S2[Sync Job API]
+        S3[Redis Queue]
+        S4[Celery Worker]
+        S5[Idempotent Upsert]
+        S6[Gmail historyId Incremental Sync]
+    end
 
-    FE -->|Trigger re-sync| API_SYNC[FastAPI Sync API]
-    API_SYNC -->|Create sync job| DB
-    API_SYNC -->|Push job| REDIS[(Redis Queue)]
-    REDIS --> WORKER[Celery Worker]
+    subgraph AI[AI Intelligence Layer]
+        I1[Classification API]
+        I2[Rule-Based Filter]
+        I3[LLM / Lightweight Classifier]
+        I4[Category + Priority + Needs Reply]
+        I5[Confidence + Model Version Logs]
+        I6[Thread Summary API]
+    end
 
-    WORKER -->|Read encrypted token| DB
-    WORKER -->|Fetch new changes using historyId| GMAIL_API
-    WORKER -->|Idempotent upsert, no duplicates| DB
-    WORKER -->|Update job status: pending/running/completed/failed/retrying| DB
+    DB[(PostgreSQL Database)]
+    GM[Gmail API]
+    DASH[Inbox Intelligence Dashboard]
 
-    FE -->|Request AI classification| AI_API[FastAPI AI APIs]
-    AI_API --> CLASSIFIER[Two-Stage Classifier]
+    FE --> A1
+    A1 --> A2
+    A2 --> DB
+    A1 --> A3
+    A3 --> FE
 
-    CLASSIFIER --> RULES[Rule-Based Filter]
-    RULES -->|Obvious email| RESULT[Category + Priority + Needs Reply]
+    FE --> G1
+    G1 --> G2
+    G2 --> G3
+    G3 --> GM
+    G3 --> G4
+    G4 --> DB
 
-    RULES -->|Ambiguous email| LLM[LLM / Lightweight Classifier]
-    LLM --> RESULT
+    G3 --> S1
+    S1 --> GM
+    S1 --> S5
+    S5 --> DB
 
-    RESULT -->|Store prediction| DB
-    RESULT -->|Store confidence + model_version + audit log| LOGS[Classification Logs]
-    LOGS --> DB
+    FE --> S2
+    S2 --> DB
+    S2 --> S3
+    S3 --> S4
+    S4 --> GM
+    S4 --> S6
+    S6 --> S5
 
-    DB --> DASH[Inbox Intelligence Dashboard]
+    FE --> I1
+    I1 --> I2
+    I2 -->|obvious emails| I4
+    I2 -->|ambiguous emails| I3
+    I3 --> I4
+    I4 --> DB
+    I4 --> I5
+    I5 --> DB
+
+    FE --> I6
+    I6 --> DB
+
+    DB --> DASH
     DASH --> FE
 ```
 
