@@ -85,14 +85,49 @@ npm run build
 ## Architecture
 
 ```mermaid
-flowchart LR
-  Browser[React frontend] --> API[FastAPI API]
-  API --> DB[(PostgreSQL)]
-  API --> Redis[(Redis)]
-  Worker[Celery workers] --> Redis
-  Worker --> DB
-  Worker --> Gmail[Gmail API]
-  Worker --> OpenAI[OpenAI APIs]
+flowchart TD
+    U[User] --> FE[React + TypeScript Frontend]
+
+    FE -->|Signup / Login| AUTH[FastAPI Auth APIs]
+    AUTH -->|Hash password / verify user| DB[(PostgreSQL)]
+    AUTH -->|Return JWT token| FE
+
+    FE -->|Connect Gmail| GMAIL_AUTH[Gmail OAuth Endpoint]
+    GMAIL_AUTH -->|Redirect user| GOOGLE[Google OAuth Consent Screen]
+    GOOGLE -->|OAuth code| CALLBACK[OAuth Callback API]
+    CALLBACK -->|Exchange code for tokens| GOOGLE
+    CALLBACK -->|Encrypt refresh token| SEC[Token Encryption Layer]
+    SEC --> DB
+
+    CALLBACK -->|First email sync| GMAIL_API[Gmail API]
+    GMAIL_API -->|Emails + Threads| SYNC[Email Sync Service]
+    SYNC -->|Upsert users, emails, threads| DB
+
+    FE -->|Trigger re-sync| API_SYNC[FastAPI Sync API]
+    API_SYNC -->|Create sync job| DB
+    API_SYNC -->|Push job| REDIS[(Redis Queue)]
+    REDIS --> WORKER[Celery Worker]
+
+    WORKER -->|Read encrypted token| DB
+    WORKER -->|Fetch new changes using historyId| GMAIL_API
+    WORKER -->|Idempotent upsert, no duplicates| DB
+    WORKER -->|Update job status: pending/running/completed/failed/retrying| DB
+
+    FE -->|Request AI classification| AI_API[FastAPI AI APIs]
+    AI_API --> CLASSIFIER[Two-Stage Classifier]
+
+    CLASSIFIER --> RULES[Rule-Based Filter]
+    RULES -->|Obvious email| RESULT[Category + Priority + Needs Reply]
+
+    RULES -->|Ambiguous email| LLM[LLM / Lightweight Classifier]
+    LLM --> RESULT
+
+    RESULT -->|Store prediction| DB
+    RESULT -->|Store confidence + model_version + audit log| LOGS[Classification Logs]
+    LOGS --> DB
+
+    DB --> DASH[Inbox Intelligence Dashboard]
+    DASH --> FE
 ```
 
 ## Repository Layout
