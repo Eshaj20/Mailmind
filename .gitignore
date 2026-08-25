@@ -13,3 +13,7 @@ dist/
 
 postgres_data/
 .DS_Store
+
+# Local interview prep notes
+docs/hexcoded_interview_prep.md
+docs/mailmind_interview_quick_guide.md
