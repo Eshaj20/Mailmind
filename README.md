@@ -1,4 +1,4 @@
-# MailMind
+﻿# MailMind
 
 MailMind is a production-style AI email cleaner and inbox intelligence app. The first milestone is a deployable SaaS skeleton with FastAPI, PostgreSQL, JWT authentication, React, Docker Compose, tests, and a clear path toward Gmail sync and AI features.
 
@@ -86,86 +86,71 @@ npm run build
 
 ## Architecture
 ```mermaid
-flowchart LR
+flowchart TD
     U[User] --> FE[React + TypeScript Frontend]
+    FE --> DASH[Inbox Intelligence Dashboard]
 
-    subgraph AUTH[Authentication]
-        A1[Signup / Login APIs]
-        A2[Password Hashing]
-        A3[JWT Token]
+    subgraph API[FastAPI Backend]
+        AUTH[Auth APIs]
+        GMAIL[Gmail OAuth APIs]
+        SYNC[Sync Job APIs]
+        AI[AI Classification APIs]
+        SEARCH[Hybrid Search API]
     end
 
-    subgraph GMAIL[Gmail Connection]
-        G1[OAuth Authorize API]
-        G2[Google Consent Screen]
-        G3[OAuth Callback API]
-        G4[Token Encryption]
+    subgraph AUTH_FLOW[Authentication]
+        AUTH --> HASH[Password Hashing]
+        AUTH --> JWT[JWT Access Token]
+        HASH --> DB[(PostgreSQL)]
+        JWT --> FE
     end
 
-    subgraph SYNC[Email Sync Engine]
-        S1[First Sync Service]
-        S2[Sync Job API]
-        S3[Redis Queue]
-        S4[Celery Worker]
-        S5[Idempotent Upsert]
-        S6[Gmail historyId Incremental Sync]
+    subgraph GMAIL_FLOW[Gmail Connection + Sync]
+        GMAIL --> CONSENT[Google Consent Screen]
+        CONSENT --> CALLBACK[OAuth Callback]
+        CALLBACK --> ENC[Encrypt Refresh Token]
+        CALLBACK --> FIRST[First Email Sync]
+        SYNC --> REDIS[Redis Queue]
+        REDIS --> WORKER[Celery Worker]
+        WORKER --> HIST[Gmail historyId Incremental Sync]
+        FIRST --> UPSERT[Idempotent Email Upsert]
+        HIST --> UPSERT
     end
 
-    subgraph AI[AI Intelligence Layer]
-        I1[Classification API]
-        I2[Rule-Based Filter]
-        I3[LLM / Lightweight Classifier]
-        I4[Category + Priority + Needs Reply]
-        I5[Confidence + Model Version Logs]
-        I6[Thread Summary API]
+    subgraph AI_FLOW[AI Layer]
+        AI --> RULES[Rule-Based Pre-Filter]
+        RULES -->|obvious emails| LABELS[Category + Priority + Needs Reply]
+        RULES -->|ambiguous emails| LLM[LLM / Lightweight Classifier]
+        LLM --> LABELS
+        LABELS --> LOGS[Confidence + Model Version Logs]
+        AI --> SUMMARY[Thread Summary]
     end
 
-    DB[(PostgreSQL Database)]
+    subgraph SEARCH_FLOW[Week 5 Hybrid Search]
+        SEARCH --> QEMB[Query Embedding]
+        SEARCH --> FTS[Postgres Full-Text Search]
+        QEMB --> VEC[pgvector Cosine Search]
+        FTS --> RRF[Reciprocal Rank Fusion]
+        VEC --> RRF
+        RRF --> RESULTS[Ranked Email Results]
+        BENCH[Benchmark Script: Hit@K + MRR] -.-> SEARCH
+    end
+
     GM[Gmail API]
-    DASH[Inbox Intelligence Dashboard]
 
-    FE --> A1
-    A1 --> A2
-    A2 --> DB
-    A1 --> A3
-    A3 --> FE
-
-    FE --> G1
-    G1 --> G2
-    G2 --> G3
-    G3 --> GM
-    G3 --> G4
-    G4 --> DB
-
-    G3 --> S1
-    S1 --> GM
-    S1 --> S5
-    S5 --> DB
-
-    FE --> S2
-    S2 --> DB
-    S2 --> S3
-    S3 --> S4
-    S4 --> GM
-    S4 --> S6
-    S6 --> S5
-
-    FE --> I1
-    I1 --> I2
-    I2 -->|obvious emails| I4
-    I2 -->|ambiguous emails| I3
-    I3 --> I4
-    I4 --> DB
-    I4 --> I5
-    I5 --> DB
-
-    FE --> I6
-    I6 --> DB
-
+    GMAIL --> GM
+    FIRST --> GM
+    WORKER --> GM
+    ENC --> DB
+    UPSERT --> DB
+    LABELS --> DB
+    LOGS --> DB
+    SUMMARY --> DB
+    FTS --> DB
+    VEC --> DB
+    RESULTS --> DASH
     DB --> DASH
-    DASH --> FE
 ```
-
 ## Repository Layout
 
 ```text
@@ -183,6 +168,7 @@ MailMind/
     workflows/
   docker-compose.yml
 ```
+
 
 
 
