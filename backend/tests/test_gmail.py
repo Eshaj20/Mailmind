@@ -8,11 +8,12 @@ from app.models.sync_job import SyncJob
 from app.services.gmail import GmailMessage, GmailMessageBatch, TransientGmailSyncError, create_oauth_state
 from app.services.sync_jobs import create_sync_job, process_sync_job
 
-
+# This test file contains tests for the Gmail integration endpoints of the FastAPI application, including OAuth flow, email synchronization, and handling of transient errors during sync jobs.
 class FakeGmailClient:
     def authorization_url(self, state: str) -> str:
         return f"https://accounts.google.test/oauth?state={state}"
 
+    # Simulates exchanging an OAuth code for access and refresh tokens, returning a predefined response for testing purposes.
     def exchange_code(self, code: str):
         return {
             "access_token": "test-access-token",
@@ -20,13 +21,16 @@ class FakeGmailClient:
             "scope": "openid email profile https://www.googleapis.com/auth/gmail.readonly",
         }
 
+    # Simulates refreshing an access token using a refresh token, returning a predefined access token for testing purposes.
     def refresh_access_token(self, refresh_token: str) -> str:
         assert refresh_token == "test-refresh-token"
         return "refreshed-access-token"
 
+    # Simulates fetching the user's Gmail profile, returning a predefined email address and history ID for testing purposes.
     def fetch_profile(self, access_token: str):
         return {"emailAddress": "esha.gmail@example.com", "historyId": "history-1"}
 
+    # Simulates fetching the latest Gmail messages, returning a predefined list of GmailMessage objects for testing purposes.
     def fetch_latest_messages(self, access_token: str, max_results: int):
         assert max_results > 0
         return [
@@ -42,6 +46,7 @@ class FakeGmailClient:
                 labels=["INBOX", "UNREAD"],
                 received_at=datetime(2026, 7, 21, 10, 0, tzinfo=UTC),
             ),
+            # Simulates fetching Gmail messages from history, returning a predefined GmailMessageBatch object for testing purposes.
             GmailMessage(
                 gmail_message_id="msg-2",
                 gmail_thread_id="thread-2",
@@ -56,6 +61,7 @@ class FakeGmailClient:
             ),
         ]
 
+# Simulates fetching Gmail messages from history, returning a predefined GmailMessageBatch object for testing purposes.
     def fetch_history_messages(self, access_token: str, start_history_id: str, max_results: int):
         assert start_history_id == "history-3"
         return GmailMessageBatch(
@@ -76,12 +82,13 @@ class FakeGmailClient:
             ],
         )
 
-
+# A subclass of FakeGmailClient that simulates a transient error when attempting to refresh the access token, used for testing error handling in sync jobs.
 class FailingGmailClient(FakeGmailClient):
     def refresh_access_token(self, refresh_token: str) -> str:
         raise TransientGmailSyncError("temporary timeout")
 
 
+# A fake sync queue implementation that records enqueued sync job IDs for testing purposes, allowing verification of job queuing behavior in tests.
 class FakeSyncQueue:
     def __init__(self) -> None:
         self.enqueued: list[int] = []
@@ -90,7 +97,7 @@ class FakeSyncQueue:
         self.enqueued.append(sync_job_id)
         return "fake-celery-task"
 
-
+# A fake Gmail client that simulates fetching messages for classification, returning a predefined set of messages for testing purposes.
 def _auth_headers(client):
     signup = client.post(
         "/api/v1/auth/signup",
@@ -104,7 +111,7 @@ def _auth_headers(client):
     assert login.status_code == 200
     return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
-
+# A fake Gmail client that simulates fetching messages for classification, returning a predefined set of messages for testing purposes.
 def _connect_gmail(client):
     state = create_oauth_state(user_id=1)
     callback = client.post(
@@ -114,7 +121,7 @@ def _connect_gmail(client):
     assert callback.status_code == 200
     return callback
 
-
+# Test that the Gmail OAuth callback endpoint correctly persists the first sync and behaves idempotently on subsequent calls, ensuring that duplicate syncs do not create additional records.
 def test_gmail_oauth_callback_persists_first_sync_idempotently(client):
     client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
     headers = _auth_headers(client)
@@ -142,7 +149,7 @@ def test_gmail_oauth_callback_persists_first_sync_idempotently(client):
     assert len(emails.json()) == 2
     assert emails.json()[0]["subject"] == "Electricity bill"
 
-
+# Test that the Gmail sync endpoint correctly queues a sync job and returns the expected response, verifying that the job is enqueued in the fake sync queue.
 def test_gmail_sync_endpoint_queues_job(client):
     fake_queue = FakeSyncQueue()
     client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
@@ -160,7 +167,7 @@ def test_gmail_sync_endpoint_queues_job(client):
     assert jobs.status_code == 200
     assert len(jobs.json()) == 1
 
-
+# Test that the process_sync_job function correctly processes a sync job, updates the Gmail account's history ID, and persists the fetched emails in the database.
 def test_process_sync_job_uses_history_id_incrementally(client, db_session):
     client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
     headers = _auth_headers(client)
@@ -179,7 +186,7 @@ def test_process_sync_job_uses_history_id_incrementally(client, db_session):
     assert account.history_id == "history-4"
     assert db_session.scalar(select(Email).where(Email.gmail_message_id == "msg-3")) is not None
 
-
+# Test that the process_sync_job function correctly handles transient errors during sync jobs, marking the job as retrying and incrementing the attempt count without persisting any emails in the database.
 def test_process_sync_job_marks_transient_failure_retrying(client, db_session):
     client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
     _auth_headers(client)
@@ -194,3 +201,45 @@ def test_process_sync_job_marks_transient_failure_retrying(client, db_session):
     assert processed.attempt_count == 1
     assert processed.error_type == "transient_gmail_error"
     assert db_session.scalar(select(SyncJob).where(SyncJob.id == job.id)).status == "retrying"
+
+
+def test_hybrid_search_returns_ranked_email_results(client):
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    response = client.get("/api/v1/gmail/search?q=electricity%20bill", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["query"] == "electricity bill"
+    assert payload["results"]
+    top = payload["results"][0]
+    assert top["email"]["subject"] == "Electricity bill"
+    assert top["keyword_rank"] == 1
+    assert top["vector_rank"] is not None
+    assert top["rrf_score"] > 0
+    assert top["match_reason"] == "keyword_and_semantic"
+
+
+def test_hybrid_search_is_user_scoped(client):
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    other_signup = client.post(
+        "/api/v1/auth/signup",
+        json={"email": "other@example.com", "password": "supersecret", "full_name": "Other"},
+    )
+    assert other_signup.status_code == 201
+    other_login = client.post(
+        "/api/v1/auth/login",
+        data={"username": "other@example.com", "password": "supersecret"},
+    )
+    assert other_login.status_code == 200
+    other_headers = {"Authorization": f"Bearer {other_login.json()['access_token']}"}
+
+    response = client.get("/api/v1/gmail/search?q=electricity", headers=other_headers)
+
+    assert response.status_code == 200
+    assert response.json()["results"] == []
