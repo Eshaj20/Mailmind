@@ -7,7 +7,7 @@ from app.core.config import settings
 
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-
+# The hash_password function takes a plain text password as input and returns a hashed version of the password using the bcrypt hashing algorithm. This is used for securely storing user passwords in the database.
 def hash_password(password: str) -> str:
     return password_context.hash(password)
 

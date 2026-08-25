@@ -14,7 +14,7 @@ from app.services.sync_queue import SyncJobQueue
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/login")
 
-
+# Dependency to get a database session for each request, ensuring that the session is properly closed after use. This function yields a SQLAlchemy Session object that can be used in route handlers and other dependencies.
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
@@ -34,7 +34,7 @@ def get_sync_queue() -> SyncJobQueue:
 def get_llm_client() -> LLMClient:
     return LLMClient()
 
-
+# Dependency to retrieve the current authenticated user based on the provided OAuth2 token. It decodes the JWT token, extracts the user ID, and fetches the corresponding User object from the database. If the token is invalid or the user does not exist, it raises an HTTP 401 Unauthorized exception.
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
