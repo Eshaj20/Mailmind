@@ -5,7 +5,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 
+# The SyncJob class represents a synchronization job for a user's Gmail account. It is used to track the status and progress of email synchronization tasks, including the number of attempts, synced emails, created and updated counts, and any errors encountered during the process. 
 
+# The class includes fields for user ID, Gmail account ID, job type, status, attempt count, maximum attempts, synced count, created count, updated count, Celery task ID, error type, error message, start and finish timestamps, and creation and update timestamps. It establishes relationships with the User and GmailAccount models for easy access to related data.
 class SyncJob(Base):
     __tablename__ = "sync_jobs"
 

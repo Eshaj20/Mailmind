@@ -13,7 +13,7 @@ class _ImmediateResult:
 class _ImmediateTaskRequest:
     retries = 0
 
-
+# The _ImmediateTask and _ImmediateCelery classes provide a mock implementation of Celery tasks for local testing purposes. They allow for immediate execution of tasks without requiring a running Celery worker or broker. The _ImmediateTask class simulates a Celery task, while the _ImmediateCelery class provides a decorator to create immediate tasks. This setup is useful for testing and development environments where Celery is not available.
 class _ImmediateTask:
     def __init__(self, func, bind: bool = False):
         self.func = func

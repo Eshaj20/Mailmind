@@ -18,13 +18,14 @@ from app.services.gmail import (
 
 logger = logging.getLogger(__name__)
 
+# Define constants for the various statuses a sync job can have, including queued, running, retrying, succeeded, and failed. These constants are used to track the state of sync jobs in the database and provide meaningful status updates during the synchronization process.
 SYNC_STATUS_QUEUED = "queued"
 SYNC_STATUS_RUNNING = "running"
 SYNC_STATUS_RETRYING = "retrying"
 SYNC_STATUS_SUCCEEDED = "succeeded"
 SYNC_STATUS_FAILED = "failed"
 
-
+# Create a new sync job in the database for a given user and Gmail account, initializing it with the queued status and setting the maximum number of attempts based on application settings. The function returns the newly created SyncJob instance.
 def create_sync_job(db: Session, user: User, account: GmailAccount) -> SyncJob:
     job = SyncJob(
         user_id=user.id,
@@ -37,7 +38,7 @@ def create_sync_job(db: Session, user: User, account: GmailAccount) -> SyncJob:
     db.flush()
     return job
 
-
+# Process a sync job by retrieving it from the database, updating its status to running, and attempting to synchronize the associated Gmail account. The function handles transient and permanent errors, updating the job's status and error information accordingly. It returns the updated SyncJob instance after processing.
 def process_sync_job(
     db: Session,
     sync_job_id: int,
@@ -74,6 +75,7 @@ def process_sync_job(
         },
     )
 
+# Attempt to synchronize the Gmail account associated with the sync job, handling any transient or permanent errors that may occur. The function updates the sync job's status and error information based on the outcome of the synchronization attempt, and returns the updated SyncJob instance.
     try:
         stats = sync_gmail_account(
             db=db,
@@ -97,7 +99,7 @@ def process_sync_job(
     _mark_succeeded(db, job, stats, started)
     return job
 
-
+# Helper function to mark a sync job as succeeded, updating its status, counts of synced, created, and updated emails, and logging the completion event with relevant details. The function commits the changes to the database.
 def _mark_succeeded(db: Session, job: SyncJob, stats: GmailSyncStats, started: float) -> None:
     job.status = SYNC_STATUS_SUCCEEDED
     job.synced_count = stats.synced_count
@@ -119,7 +121,7 @@ def _mark_succeeded(db: Session, job: SyncJob, stats: GmailSyncStats, started: f
     )
     db.commit()
 
-
+# Helper function to mark a sync job as having encountered a transient failure, updating its status, error information, and logging the event with relevant details. The function commits the changes to the database and optionally raises an exception for retrying the job if specified.
 def _mark_transient_failure(db: Session, job: SyncJob, exc: TransientGmailSyncError, started: float) -> None:
     if job.attempt_count < job.max_attempts:
         job.status = SYNC_STATUS_RETRYING
@@ -144,7 +146,7 @@ def _mark_transient_failure(db: Session, job: SyncJob, exc: TransientGmailSyncEr
     )
     db.commit()
 
-
+# Helper function to mark a sync job as failed, updating its status, error information, and logging the failure event with relevant details. The function commits the changes to the database.
 def _mark_failed(db: Session, job: SyncJob, error_type: str, error_message: str, started: float) -> None:
     job.status = SYNC_STATUS_FAILED
     job.error_type = error_type
