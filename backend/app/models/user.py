@@ -5,7 +5,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 
+# The User class represents a user in the application. It defines the structure of the users table in the database, including fields for user ID, email, full name, hashed password, active status, and creation timestamp.
 
+#  The class also establishes a relationship with the GmailAccount model to facilitate querying and data retrieval related to a user's Gmail accounts.
 class User(Base):
     __tablename__ = "users"
 

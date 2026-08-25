@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 
+# The UserCreate, UserRead, and Token classes are Pydantic models that define the structure of data used for user creation, user retrieval, and authentication token representation in the application. 
 
 class UserCreate(BaseModel):
     email: EmailStr

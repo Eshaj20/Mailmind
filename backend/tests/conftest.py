@@ -8,6 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+# Set environment variables for testing
 os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
 os.environ["SECRET_KEY"] = "test-secret-key-at-least-16"
 os.environ["GOOGLE_CLIENT_ID"] = "test-google-client"
@@ -16,19 +17,23 @@ os.environ["SYNC_JOB_MAX_ATTEMPTS"] = "3"
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+# Import application modules after setting up the environment
 from app.api.deps import get_db  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.main import create_app  # noqa: E402
 
-
+# Configure the test database and session
 @pytest.fixture()
+# db session fixture to provide a database session for tests
 def db_session() -> Session:
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    # Create a new sessionmaker for the test database
     TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    # Create all tables in the test database
     Base.metadata.create_all(bind=engine)
     db = TestingSessionLocal()
     try:
@@ -36,12 +41,13 @@ def db_session() -> Session:
     finally:
         db.close()
 
-
+# Configure the FastAPI test client with the overridden database dependency
 @pytest.fixture()
 def client(db_session: Session) -> TestClient:
     def override_get_db():
         yield db_session
 
     app = create_app()
+    # Override the get_db dependency with the test database session
     app.dependency_overrides[get_db] = override_get_db
     return TestClient(app)
