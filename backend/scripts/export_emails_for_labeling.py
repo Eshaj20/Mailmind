@@ -22,7 +22,7 @@ from app.db.session import SessionLocal  # noqa: E402
 from app.models.gmail import Email  # noqa: E402
 from app.models.user import User  # noqa: E402
 
-
+# Main function to parse command-line arguments, query the database for the specified user's synced emails, and export them to a CSV file with empty label columns for hand-labeling.
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--email", required=True, help="The MailMind account email to export emails for")
@@ -30,6 +30,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=150, help="Max emails to export (aim for 100-150)")
     args = parser.parse_args()
 
+# Connect to the database and query for the specified user and their synced emails, then write the results to a CSV file with empty label columns for hand-labeling.
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == args.email))
@@ -44,11 +45,14 @@ def main() -> None:
                 .limit(args.limit)
             )
         )
+        # If no synced emails are found for the user, exit the script with an error message indicating that a Gmail sync should be run first.
         if not emails:
             raise SystemExit("No synced emails found. Run a Gmail sync first (Week 2/3 features).")
 
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write the emails to a CSV file with the specified columns, leaving the label columns empty for hand-labeling.
         with output_path.open("w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(

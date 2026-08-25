@@ -6,7 +6,7 @@ the evaluation harness (`scripts/evaluate_classifier.py`) runs out of the box
 and CI can catch regressions in the rule engine.
 
 It is **not** the "100-150 hand-labeled real emails" called for in the Week 4
-plan — synthetic examples make the pipeline easy to demo but don't tell you
+plan - synthetic examples make the pipeline easy to demo but don't tell you
 how the classifier performs on your actual inbox's noise, slang, and edge
 cases.
 
@@ -22,3 +22,4 @@ To build a real evaluation set:
 
 Re-run step 4 whenever you change the rule engine, keyword lists, or model
 version to track whether accuracy improved or regressed.
+

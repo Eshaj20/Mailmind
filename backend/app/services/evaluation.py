@@ -5,6 +5,9 @@ from typing import Any
 
 from app.services.classification import CATEGORIES, PRIORITIES, LLMClient, classify_fields
 
+# The _prf_report function calculates precision, recall, and F1 score for each class label based on the true and predicted labels.
+ 
+# It also computes overall accuracy and macro F1 score across all classes. The function returns a dictionary containing per-class metrics, overall accuracy, and macro F1 score.
 
 def _prf_report(y_true: list[str], y_pred: list[str], labels: list[str]) -> dict[str, Any]:
     per_class: dict[str, Any] = {}

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 
+# The EmailClassification class represents an append-only log of every classification run for an email. It is used to store the full history of email classifications, allowing for auditing and reprocessing of confidence drift and model versions. The class includes fields for email ID, user ID, category, priority, needs reply flag, confidence score, stage, model version, rationale, and creation timestamp. It establishes relationships with the Email and User models for easy access to related data.
 
 class EmailClassification(Base):
     """Append-only log of every classification run for an email.

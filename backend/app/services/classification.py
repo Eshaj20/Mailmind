@@ -17,6 +17,10 @@ from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
+# Constants and patterns used for email classification, including categories, priorities, stages, model versions, and regex patterns for identifying automated senders and questions in email content. 
+
+# These constants are used throughout the classification process to determine the appropriate category, priority, and reply needs for each email.
+
 CATEGORIES = ["primary", "promotions", "social", "updates", "spam"]
 PRIORITIES = ["high", "medium", "low"]
 
@@ -76,6 +80,10 @@ _IMPORTANT_KEYWORDS = [
 ]
 _REPLY_KEYWORDS = ["please respond", "action required", "rsvp", "let me know", "confirm", "can we", "could you"]
 
+# The _CLASSIFY_SYSTEM_PROMPT is a system prompt used for stage-two classification of emails using an OpenAI-compatible chat completions API. 
+
+# It instructs the model to classify the email and respond with a single JSON object containing keys for category, priority, needs_reply, confidence, and rationale. The prompt specifies the expected values for category and priority based on predefined constants.
+
 _CLASSIFY_SYSTEM_PROMPT = (
     "You are an email triage assistant for an inbox cleaner. Classify the email and reply with a single "
     "JSON object only, no prose, with keys: category (one of "
@@ -83,6 +91,7 @@ _CLASSIFY_SYSTEM_PROMPT = (
     "confidence (0-1 float), rationale (short string)."
 )
 
+# The LLMClient class is a wrapper around an OpenAI-compatible chat completions API, used for stage-two classification of emails and thread summaries. It provides methods for classifying email fields and summarizing email threads, handling API requests and responses, and managing configuration settings such as API keys and model selection.
 
 @dataclass
 class ClassificationResult:
@@ -413,7 +422,7 @@ def classify_unclassified_emails(
     db.commit()
     return stats
 
-
+# extractive summary 
 def _extractive_summary(subject: str | None, messages: list[Email]) -> str:
     latest = messages[-1]
     preview = latest.snippet or subject or "No preview available."

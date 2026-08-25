@@ -28,7 +28,7 @@ def load_labeled_csv(path: Path) -> list[dict[str, str]]:
     with path.open(newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
-
+# Render the evaluation report as a Markdown string, including sample size, stage usage, and detailed metrics for each classification task (category, priority, needs_reply).
 def render_markdown(report: dict) -> str:
     lines = ["# AI Classification Evaluation Report", ""]
     lines.append(f"- Sample size: {report['sample_count']}")
@@ -48,7 +48,7 @@ def render_markdown(report: dict) -> str:
         lines.append("")
     return "\n".join(lines)
 
-
+# Main function to parse command-line arguments, load the labeled CSV, evaluate the classifier, render the report in Markdown format, and save it to the specified output file.
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", default="eval/labeled_emails.csv", help="Path to labeled CSV")
