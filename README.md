@@ -4,7 +4,7 @@ MailMind is a production-style AI email cleaner and inbox intelligence app. The 
 
 ## Current Milestone
 
-Week 4 AI layer is complete:
+Week 5 hybrid search is in progress:
 
 - FastAPI backend with health, signup, login, and `/me`
 - SQLAlchemy models and Alembic setup
@@ -25,13 +25,15 @@ Week 4 AI layer is complete:
 - Classification metadata (category, priority, needs_reply, confidence, model_version) stored per email plus an append-only audit log
 - Thread summarization with the same LLM/fallback split
 - Evaluation harness (`scripts/evaluate_classifier.py`) reporting precision/recall/F1 against a labeled dataset, plus `scripts/export_emails_for_labeling.py` to build one from your real inbox
+- Hybrid email search API (`GET /api/v1/gmail/search`) combining PostgreSQL full-text search, pgvector cosine distance, deterministic local embeddings, and Reciprocal Rank Fusion
+- Dashboard search panel showing RRF score, keyword rank, semantic rank, and match reason
 
 ## Tech Stack
 
 - Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Pydantic, JWT, Gmail API, Celery
 - Frontend: React, TypeScript, Tailwind CSS, React Query, React Router
 - Infrastructure: Docker Compose, Redis, Celery workers, GitHub Actions, encrypted token storage
-- Planned AI: OpenAI GPT, embeddings, hybrid Postgres full-text + pgvector search, RAG-style semantic search
+- AI/Search: OpenAI-compatible GPT classification, deterministic local embeddings for offline search, PostgreSQL full-text search, pgvector indexing, and hybrid RRF ranking
 
 ## Quick Start
 
