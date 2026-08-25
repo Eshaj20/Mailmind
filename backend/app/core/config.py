@@ -1,10 +1,10 @@
-from functools import lru_cache
+﻿from functools import lru_cache
 import json
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
+# Central app settings loaded from environment variables or .env.
 class Settings(BaseSettings):
     project_name: str = "MailMind"
     api_v1_prefix: str = "/api/v1"
@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     sync_job_max_attempts: int = 3
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    # Search knobs: local deterministic embeddings use the same contract as a future OpenAI embedding provider.
+    embedding_model: str = "text-embedding-3-small"
+    embedding_dimensions: int = 64
+    search_rrf_k: int = 60  # Larger k softens rank differences when merging keyword/vector results.
     classification_rule_confidence_threshold: float = 0.75
     classification_batch_limit: int = 200
 
@@ -55,3 +59,10 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+
+
+
+
+
+

@@ -1,11 +1,11 @@
-from datetime import UTC, datetime
+﻿from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 
-
+# Gmail data model: accounts own threads/emails, while email rows also carry AI and search metadata.
 class GmailAccount(Base):
     __tablename__ = "gmail_accounts"
     __table_args__ = (UniqueConstraint("user_id", "google_email", name="uq_gmail_accounts_user_email"),)
@@ -80,6 +80,12 @@ class Email(Base):
     subject: Mapped[str | None] = mapped_column(String(512), nullable=True)
     snippet: Mapped[str | None] = mapped_column(Text, nullable=True)
     body_preview: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Week 5 hybrid search metadata. The JSON embedding keeps tests DB-agnostic;
+    # Postgres mirrors it into a pgvector column through the Alembic migration.
+    search_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    search_embedding: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
+    search_embedding_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    search_embedded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     labels: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     is_read: Mapped[bool] = mapped_column(default=False, nullable=False)
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -107,3 +113,10 @@ class Email(Base):
     classifications = relationship(
         "EmailClassification", back_populates="email", cascade="all, delete-orphan"
     )
+
+
+
+
+
+
+
