@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 import logging
@@ -14,6 +14,7 @@ from app.core.config import Settings, settings
 from app.core.crypto import decrypt_value, encrypt_value
 from app.models.gmail import Email, EmailThread, GmailAccount
 from app.models.user import User
+from app.services.search import ensure_email_search_index
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -279,7 +280,7 @@ def upsert_gmail_account(
     account.sync_status = "connected"
     return account
 
-
+# Idempotent upsert: Gmail message IDs decide create vs update, so retries do not duplicate rows.
 def sync_latest_messages(
     db: Session,
     user: User,
@@ -343,6 +344,8 @@ def sync_latest_messages(
         email.labels = message.labels
         email.is_read = "UNREAD" not in message.labels
         email.received_at = message.received_at
+        # Keep the Week 5 search index fresh whenever sync creates or updates an email.
+        ensure_email_search_index(email)
         latest_history_id = message.history_id or latest_history_id
         logger.info(
             event_name,
@@ -404,3 +407,8 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
+
+
+
+
+
