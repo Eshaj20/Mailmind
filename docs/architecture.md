@@ -113,3 +113,4 @@ The first-sync path upserts by Gmail account/message IDs so repeated sync runs u
 - Evaluation: `scripts/export_emails_for_labeling.py` exports synced emails to a CSV for hand-labeling; `scripts/evaluate_classifier.py` runs the pipeline against a labeled CSV and reports precision/recall/F1 per category, priority, and needs_reply into `eval/eval_report.md`.
 
 
+
