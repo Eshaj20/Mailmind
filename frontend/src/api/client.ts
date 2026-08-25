@@ -40,6 +40,20 @@ export type Email = {
   classified_at: string | null;
 };
 
+export type EmailSearchResult = {
+  email: Email;
+  keyword_rank: number | null;
+  vector_rank: number | null;
+  keyword_score: number;
+  vector_score: number;
+  rrf_score: number;
+  match_reason: string;
+};
+
+export type EmailSearchResponse = {
+  query: string;
+  results: EmailSearchResult[];
+};
 export type ClassificationBatch = {
   classified_count: number;
   by_category: Record<string, number>;
@@ -156,6 +170,9 @@ export async function getEmails() {
   return request<Email[]>("/gmail/emails?limit=5");
 }
 
+export async function searchEmails(query: string) {
+  return request<EmailSearchResponse>(`/gmail/search?q=${encodeURIComponent(query)}&limit=8`);
+}
 export async function queueGmailSync(accountId?: number) {
   const suffix = accountId ? `?account_id=${accountId}` : "";
   return request<SyncJob>(`/gmail/sync${suffix}`, { method: "POST" });
@@ -176,3 +193,4 @@ export async function getClassificationSummary() {
 export async function getThreads() {
   return request<Thread[]>("/gmail/threads?limit=10");
 }
+

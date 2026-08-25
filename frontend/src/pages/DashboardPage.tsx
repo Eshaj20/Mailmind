@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Brain, LogOut, Mail, RefreshCw, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -14,6 +15,7 @@ import {
   getThreads,
   getToken,
   queueGmailSync,
+  searchEmails,
 } from "../api/client";
 
 const milestones = [
@@ -42,6 +44,7 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const hasToken = Boolean(getToken());
+  const [searchQuery, setSearchQuery] = useState("");
   const meQuery = useQuery({
     queryKey: ["me"],
     queryFn: getMe,
@@ -71,6 +74,12 @@ export function DashboardPage() {
     queryKey: ["classification-summary"],
     queryFn: getClassificationSummary,
     enabled: hasToken && Boolean(accountsQuery.data?.length),
+    retry: false,
+  });
+  const searchResultsQuery = useQuery({
+    queryKey: ["email-search", searchQuery],
+    queryFn: () => searchEmails(searchQuery),
+    enabled: hasToken && Boolean(accountsQuery.data?.length) && searchQuery.trim().length >= 2,
     retry: false,
   });
   const threadsQuery = useQuery({
@@ -265,6 +274,53 @@ export function DashboardPage() {
       {connectedAccount && (
         <section className="mx-auto max-w-6xl px-6 pb-8">
           <div className="rounded-lg border border-slate-200 bg-white p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-ink">Hybrid search</h2>
+                <p className="mt-1 text-sm text-slate-500">Keyword + semantic ranking merged with RRF.</p>
+              </div>
+              <div className="relative w-full sm:max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} aria-hidden />
+                <input
+                  className="w-full rounded-lg border border-slate-200 py-3 pl-10 pr-3 text-sm outline-none focus:border-moss"
+                  placeholder="Search interview, bill, travel..."
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                />
+              </div>
+            </div>
+            {searchQuery.trim().length >= 2 && (
+              <div className="mt-5 divide-y divide-slate-100">
+                {(searchResultsQuery.data?.results ?? []).map((result) => (
+                  <div key={result.email.id} className="py-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-semibold text-ink">{result.email.subject ?? "No subject"}</p>
+                        <p className="mt-1 text-sm text-slate-500">{result.email.sender ?? "Unknown sender"}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-moss/10 px-2.5 py-1 text-xs font-medium text-moss">
+                        {result.match_reason.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-600">{result.email.snippet}</p>
+                    <p className="mt-2 text-xs text-slate-400">
+                      RRF {result.rrf_score.toFixed(4)} - keyword #{result.keyword_rank ?? "-"} - semantic #
+                      {result.vector_rank ?? "-"}
+                    </p>
+                  </div>
+                ))}
+                {searchResultsQuery.data && searchResultsQuery.data.results.length === 0 && (
+                  <p className="py-5 text-sm text-slate-500">No matching emails found.</p>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {connectedAccount && (
+        <section className="mx-auto max-w-6xl px-6 pb-8">
+          <div className="rounded-lg border border-slate-200 bg-white p-6">
             <h2 className="text-xl font-semibold text-ink">Latest synced emails</h2>
             <div className="mt-5 divide-y divide-slate-100">
               {(emailsQuery.data ?? []).map((email) => (
@@ -322,4 +378,6 @@ export function DashboardPage() {
     </main>
   );
 }
+
+
 
