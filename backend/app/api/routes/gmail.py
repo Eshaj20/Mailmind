@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+﻿from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,8 @@ from app.schemas.gmail import (
     ClassificationBatchRead,
     ClassificationSummaryRead,
     EmailRead,
+    EmailSearchResponse,
+    EmailSearchResultRead,
     GmailAccountRead,
     GmailOAuthCallback,
     GmailOAuthUrl,
@@ -27,11 +29,12 @@ from app.services.gmail import (
     upsert_gmail_account,
 )
 from app.services.sync_jobs import create_sync_job
+from app.services.search import hybrid_search_emails
 from app.services.sync_queue import SyncJobQueue
 
 router = APIRouter()
 
-
+# Fail fast when local/dev env does not have Google OAuth credentials configured.
 def _ensure_google_configured() -> None:
     if not settings.google_client_id or not settings.google_client_secret:
         raise HTTPException(
@@ -49,7 +52,7 @@ def oauth_authorize(
     state = create_oauth_state(current_user.id)
     return GmailOAuthUrl(authorization_url=client.authorization_url(state))
 
-
+# GET supports Google's browser redirect; POST keeps the same flow easy to test from API clients.
 @router.get("/oauth/callback", response_model=GmailSyncResult)
 def oauth_callback_get(
     code: str = Query(min_length=1),
@@ -67,7 +70,6 @@ def oauth_callback_post(
     client: GmailClient = Depends(get_gmail_client),
 ) -> GmailSyncResult:
     return _handle_oauth_callback(code=payload.code, state=payload.state, db=db, client=client)
-
 
 @router.get("/accounts", response_model=list[GmailAccountRead])
 def list_accounts(
@@ -143,6 +145,30 @@ def list_emails(
         )
     )
 
+# Hybrid search combines Postgres full-text results and pgvector semantic results.
+@router.get("/search", response_model=EmailSearchResponse)
+def search_emails(
+    q: str = Query(min_length=2, max_length=200),
+    limit: int = Query(default=10, ge=1, le=25),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> EmailSearchResponse:
+    results = hybrid_search_emails(db=db, user=current_user, query=q, limit=limit)
+    return EmailSearchResponse(
+        query=q,
+        results=[
+            EmailSearchResultRead(
+                email=result.email,
+                keyword_rank=result.keyword_rank,
+                vector_rank=result.vector_rank,
+                keyword_score=result.keyword_score,
+                vector_score=result.vector_score,
+                rrf_score=result.rrf_score,
+                match_reason=result.match_reason,
+            )
+            for result in results
+        ],
+    )
 
 @router.post("/classify", response_model=ClassificationBatchRead)
 def classify_emails(
@@ -279,3 +305,8 @@ def _handle_oauth_callback(
     db.commit()
     db.refresh(account)
     return GmailSyncResult(account=account, **stats.__dict__)
+
+
+
+
+

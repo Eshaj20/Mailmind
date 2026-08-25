@@ -2,6 +2,9 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+# The GmailOAuthUrl, GmailOAuthCallback, GmailAccountRead, EmailRead, ClassificationBatchRead, ClassificationSummaryRead, ThreadRead, GmailSyncResult, and SyncJobRead classes are Pydantic models that define the structure of data used for various operations related to Gmail integration in the application. 
+ 
+# These models represent the data for OAuth authorization, Gmail account information, email details, classification summaries, email threads, synchronization results, and synchronization job status. They facilitate data validation and serialization for API responses and requests.
 
 class GmailOAuthUrl(BaseModel):
     authorization_url: str
@@ -41,6 +44,19 @@ class EmailRead(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class EmailSearchResultRead(BaseModel):
+    email: EmailRead
+    keyword_rank: int | None
+    vector_rank: int | None
+    keyword_score: float
+    vector_score: float
+    rrf_score: float
+    match_reason: str
+
+
+class EmailSearchResponse(BaseModel):
+    query: str
+    results: list[EmailSearchResultRead]
 
 class ClassificationBatchRead(BaseModel):
     classified_count: int
@@ -97,3 +113,4 @@ class SyncJobRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
