@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+﻿from datetime import UTC, datetime
 
 from sqlalchemy import select
 
@@ -272,3 +272,4 @@ def test_inbox_insights_returns_health_score_and_cleanup_suggestions(client, db_
     assert payload["formula"].startswith("100 - unread_ratio")
     suggestion_types = {suggestion["suggestion_type"] for suggestion in payload["suggestions"]}
     assert {"archive_low_value", "follow_up", "read_priority"}.issubset(suggestion_types)
+
