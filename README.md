@@ -28,7 +28,7 @@ Week 6 inbox intelligence is in progress:
 - Hybrid email search API (`GET /api/v1/gmail/search`) combining PostgreSQL full-text search, pgvector cosine distance, deterministic local embeddings, and Reciprocal Rank Fusion
 - Dashboard search panel showing RRF score, keyword rank, semantic rank, and match reason
 - Inbox health API (`GET /api/v1/gmail/insights`) with an explicit formula using unread ratio, high-priority unread emails, pending replies, and cleanup candidates
-- Cleanup suggestions for low-value newsletters/promotions, pending replies, and high-priority unread emails, including top candidate emails and sender breakdowns
+- Cleanup suggestions for low-value newsletters/promotions, aged follow-ups, pending replies, and high-priority unread emails, including top candidate emails and sender breakdowns
 
 ## Tech Stack
 
@@ -170,6 +170,7 @@ MailMind/
     workflows/
   docker-compose.yml
 ```
+
 
 
 
