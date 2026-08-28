@@ -243,3 +243,32 @@ def test_hybrid_search_is_user_scoped(client):
 
     assert response.status_code == 200
     assert response.json()["results"] == []
+
+
+def test_inbox_insights_returns_health_score_and_cleanup_suggestions(client, db_session):
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    recruiter_email = db_session.scalar(select(Email).where(Email.gmail_message_id == "msg-1"))
+    bill_email = db_session.scalar(select(Email).where(Email.gmail_message_id == "msg-2"))
+    recruiter_email.priority = "high"
+    recruiter_email.needs_reply = True
+    recruiter_email.category = "primary"
+    bill_email.category = "promotions"
+    bill_email.priority = "low"
+    db_session.commit()
+
+    response = client.get("/api/v1/gmail/insights", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_emails"] == 2
+    assert payload["unread_count"] == 1
+    assert payload["high_priority_unread_count"] == 1
+    assert payload["pending_reply_count"] == 1
+    assert payload["cleanup_candidate_count"] == 1
+    assert 0 <= payload["score"] < 100
+    assert payload["formula"].startswith("100 - unread_ratio")
+    suggestion_types = {suggestion["suggestion_type"] for suggestion in payload["suggestions"]}
+    assert {"archive_low_value", "follow_up", "read_priority"}.issubset(suggestion_types)
