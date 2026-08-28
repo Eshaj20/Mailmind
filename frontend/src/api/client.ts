@@ -85,6 +85,7 @@ export type CleanupSuggestion = {
   confidence: number;
   candidate_emails: Email[];
   sender_breakdown: SenderBreakdown[];
+  oldest_days_pending: number | null;
 };
 
 export type InboxHealth = {
@@ -93,6 +94,9 @@ export type InboxHealth = {
   unread_count: number;
   high_priority_unread_count: number;
   pending_reply_count: number;
+  aged_follow_up_count: number;
+  oldest_follow_up_days: number | null;
+  follow_up_age_days: number;
   cleanup_candidate_count: number;
   formula: string;
   suggestions: CleanupSuggestion[];
@@ -223,6 +227,9 @@ export async function getInboxInsights() {
 export async function getThreads() {
   return request<Thread[]>("/gmail/threads?limit=10");
 }
+
+
+
 
 
 

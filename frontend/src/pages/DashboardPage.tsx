@@ -273,6 +273,11 @@ export function DashboardPage() {
               <div className="rounded-lg border border-slate-200 p-4">
                 <p className="text-2xl font-semibold text-ink">{inboxInsightsQuery.data.pending_reply_count}</p>
                 <p className="text-sm text-slate-500">Need reply</p>
+                {inboxInsightsQuery.data.aged_follow_up_count > 0 && (
+                  <p className="mt-1 text-xs text-coral">
+                    {inboxInsightsQuery.data.aged_follow_up_count} older than {inboxInsightsQuery.data.follow_up_age_days}d
+                  </p>
+                )}
               </div>
               <div className="rounded-lg border border-slate-200 p-4">
                 <p className="text-2xl font-semibold text-ink">{inboxInsightsQuery.data.cleanup_candidate_count}</p>
@@ -290,6 +295,11 @@ export function DashboardPage() {
                       </span>
                     </div>
                     <p className="mt-2 text-sm text-slate-600">{suggestion.description}</p>
+                    {suggestion.oldest_days_pending !== null && (
+                      <p className="mt-2 text-xs font-medium text-coral">
+                        Oldest pending: {suggestion.oldest_days_pending} days
+                      </p>
+                    )}
                     {suggestion.sender_breakdown.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {suggestion.sender_breakdown.slice(0, 3).map((sender) => (
@@ -463,6 +473,7 @@ export function DashboardPage() {
     </main>
   );
 }
+
 
 
 
