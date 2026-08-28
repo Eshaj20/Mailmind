@@ -71,6 +71,11 @@ export type ClassificationSummary = {
 };
 
 
+export type SenderBreakdown = {
+  sender: string;
+  count: number;
+};
+
 export type CleanupSuggestion = {
   suggestion_type: string;
   title: string;
@@ -78,6 +83,8 @@ export type CleanupSuggestion = {
   email_count: number;
   estimated_time_saved_minutes: number;
   confidence: number;
+  candidate_emails: Email[];
+  sender_breakdown: SenderBreakdown[];
 };
 
 export type InboxHealth = {
@@ -216,5 +223,8 @@ export async function getInboxInsights() {
 export async function getThreads() {
   return request<Thread[]>("/gmail/threads?limit=10");
 }
+
+
+
 
 

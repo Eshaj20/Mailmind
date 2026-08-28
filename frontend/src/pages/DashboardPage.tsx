@@ -290,6 +290,28 @@ export function DashboardPage() {
                       </span>
                     </div>
                     <p className="mt-2 text-sm text-slate-600">{suggestion.description}</p>
+                    {suggestion.sender_breakdown.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {suggestion.sender_breakdown.slice(0, 3).map((sender) => (
+                          <span
+                            key={`${suggestion.suggestion_type}-${sender.sender}`}
+                            className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600"
+                          >
+                            {sender.count} from {sender.sender}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {suggestion.candidate_emails.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {suggestion.candidate_emails.slice(0, 3).map((email) => (
+                          <div key={email.id} className="rounded-lg bg-slate-50 px-3 py-2">
+                            <p className="truncate text-sm font-medium text-ink">{email.subject ?? "No subject"}</p>
+                            <p className="truncate text-xs text-slate-500">{email.sender ?? "Unknown sender"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <p className="mt-3 text-xs text-slate-400">
                       {suggestion.email_count} emails - saves about {suggestion.estimated_time_saved_minutes} min
                     </p>
@@ -441,6 +463,7 @@ export function DashboardPage() {
     </main>
   );
 }
+
 
 
 
