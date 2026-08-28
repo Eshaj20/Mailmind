@@ -19,6 +19,7 @@ from app.schemas.gmail import (
     GmailOAuthUrl,
     GmailSyncResult,
     InboxHealthRead,
+    SenderBreakdownRead,
     SyncJobRead,
     ThreadRead,
 )
@@ -188,7 +189,21 @@ def get_inbox_insights(
         pending_reply_count=health.pending_reply_count,
         cleanup_candidate_count=health.cleanup_candidate_count,
         formula=health.formula,
-        suggestions=[CleanupSuggestionRead(**suggestion.__dict__) for suggestion in health.suggestions],
+        suggestions=[
+            CleanupSuggestionRead(
+                suggestion_type=suggestion.suggestion_type,
+                title=suggestion.title,
+                description=suggestion.description,
+                email_count=suggestion.email_count,
+                estimated_time_saved_minutes=suggestion.estimated_time_saved_minutes,
+                confidence=suggestion.confidence,
+                candidate_emails=suggestion.candidate_emails,
+                sender_breakdown=[
+                    SenderBreakdownRead(**sender.__dict__) for sender in suggestion.sender_breakdown
+                ],
+            )
+            for suggestion in health.suggestions
+        ],
     )
 
 
@@ -327,6 +342,7 @@ def _handle_oauth_callback(
     db.commit()
     db.refresh(account)
     return GmailSyncResult(account=account, **stats.__dict__)
+
 
 
 

@@ -59,6 +59,11 @@ class EmailSearchResponse(BaseModel):
     results: list[EmailSearchResultRead]
 
 
+class SenderBreakdownRead(BaseModel):
+    sender: str
+    count: int
+
+
 class CleanupSuggestionRead(BaseModel):
     suggestion_type: str
     title: str
@@ -134,6 +139,8 @@ class SyncJobRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
 
 
 
