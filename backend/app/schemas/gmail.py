@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 
 from pydantic import BaseModel, Field
 
@@ -58,6 +58,27 @@ class EmailSearchResponse(BaseModel):
     query: str
     results: list[EmailSearchResultRead]
 
+
+class CleanupSuggestionRead(BaseModel):
+    suggestion_type: str
+    title: str
+    description: str
+    email_count: int
+    estimated_time_saved_minutes: int
+    confidence: float
+
+
+class InboxHealthRead(BaseModel):
+    score: int
+    total_emails: int
+    unread_count: int
+    high_priority_unread_count: int
+    pending_reply_count: int
+    cleanup_candidate_count: int
+    formula: str
+    suggestions: list[CleanupSuggestionRead]
+
+
 class ClassificationBatchRead(BaseModel):
     classified_count: int
     by_category: dict[str, int]
@@ -113,4 +134,8 @@ class SyncJobRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+
+
 

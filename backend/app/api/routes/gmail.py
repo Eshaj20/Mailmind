@@ -10,6 +10,7 @@ from app.models.user import User
 from app.schemas.gmail import (
     ClassificationBatchRead,
     ClassificationSummaryRead,
+    CleanupSuggestionRead,
     EmailRead,
     EmailSearchResponse,
     EmailSearchResultRead,
@@ -17,6 +18,7 @@ from app.schemas.gmail import (
     GmailOAuthCallback,
     GmailOAuthUrl,
     GmailSyncResult,
+    InboxHealthRead,
     SyncJobRead,
     ThreadRead,
 )
@@ -28,8 +30,9 @@ from app.services.gmail import (
     sync_latest_messages,
     upsert_gmail_account,
 )
-from app.services.sync_jobs import create_sync_job
+from app.services.intelligence import build_inbox_health
 from app.services.search import hybrid_search_emails
+from app.services.sync_jobs import create_sync_job
 from app.services.sync_queue import SyncJobQueue
 
 router = APIRouter()
@@ -170,6 +173,25 @@ def search_emails(
         ],
     )
 
+
+@router.get("/insights", response_model=InboxHealthRead)
+def get_inbox_insights(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> InboxHealthRead:
+    health = build_inbox_health(db=db, user=current_user)
+    return InboxHealthRead(
+        score=health.score,
+        total_emails=health.total_emails,
+        unread_count=health.unread_count,
+        high_priority_unread_count=health.high_priority_unread_count,
+        pending_reply_count=health.pending_reply_count,
+        cleanup_candidate_count=health.cleanup_candidate_count,
+        formula=health.formula,
+        suggestions=[CleanupSuggestionRead(**suggestion.__dict__) for suggestion in health.suggestions],
+    )
+
+
 @router.post("/classify", response_model=ClassificationBatchRead)
 def classify_emails(
     current_user: User = Depends(get_current_user),
@@ -305,6 +327,11 @@ def _handle_oauth_callback(
     db.commit()
     db.refresh(account)
     return GmailSyncResult(account=account, **stats.__dict__)
+
+
+
+
+
 
 
 
