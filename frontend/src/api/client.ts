@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
+﻿const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 const TOKEN_KEY = "mailmind_token";
 
 export type SignupPayload = {
@@ -70,6 +70,26 @@ export type ClassificationSummary = {
   needs_reply_count: number;
 };
 
+
+export type CleanupSuggestion = {
+  suggestion_type: string;
+  title: string;
+  description: string;
+  email_count: number;
+  estimated_time_saved_minutes: number;
+  confidence: number;
+};
+
+export type InboxHealth = {
+  score: number;
+  total_emails: number;
+  unread_count: number;
+  high_priority_unread_count: number;
+  pending_reply_count: number;
+  cleanup_candidate_count: number;
+  formula: string;
+  suggestions: CleanupSuggestion[];
+};
 export type Thread = {
   id: number;
   gmail_thread_id: string;
@@ -189,8 +209,12 @@ export async function classifyEmails() {
 export async function getClassificationSummary() {
   return request<ClassificationSummary>("/gmail/classification/summary");
 }
+export async function getInboxInsights() {
+  return request<InboxHealth>("/gmail/insights");
+}
 
 export async function getThreads() {
   return request<Thread[]>("/gmail/threads?limit=10");
 }
+
 

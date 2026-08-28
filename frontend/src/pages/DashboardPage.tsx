@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Brain, LogOut, Mail, RefreshCw, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -10,6 +10,7 @@ import {
   getEmails,
   getGmailAccounts,
   getGmailOAuthUrl,
+  getInboxInsights,
   getMe,
   getSyncJobs,
   getThreads,
@@ -76,6 +77,12 @@ export function DashboardPage() {
     enabled: hasToken && Boolean(accountsQuery.data?.length),
     retry: false,
   });
+  const inboxInsightsQuery = useQuery({
+    queryKey: ["inbox-insights"],
+    queryFn: getInboxInsights,
+    enabled: hasToken && Boolean(accountsQuery.data?.length),
+    retry: false,
+  });
   const searchResultsQuery = useQuery({
     queryKey: ["email-search", searchQuery],
     queryFn: () => searchEmails(searchQuery),
@@ -99,6 +106,7 @@ export function DashboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sync-jobs"] });
       queryClient.invalidateQueries({ queryKey: ["emails"] });
+      queryClient.invalidateQueries({ queryKey: ["inbox-insights"] });
     },
   });
   const classifyMutation = useMutation({
@@ -107,6 +115,7 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["classification-summary"] });
       queryClient.invalidateQueries({ queryKey: ["emails"] });
       queryClient.invalidateQueries({ queryKey: ["threads"] });
+      queryClient.invalidateQueries({ queryKey: ["inbox-insights"] });
     },
   });
 
@@ -237,6 +246,60 @@ export function DashboardPage() {
           )}
         </aside>
       </section>
+
+
+      {connectedAccount && inboxInsightsQuery.data && (
+        <section className="mx-auto max-w-6xl px-6 pb-8">
+          <div className="rounded-lg border border-slate-200 bg-white p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-ink">Inbox health</h2>
+                <p className="mt-1 text-sm text-slate-500">Formula-based score with cleanup recommendations.</p>
+              </div>
+              <div className="rounded-lg bg-ink px-5 py-4 text-center text-white">
+                <p className="text-3xl font-semibold">{inboxInsightsQuery.data.score}</p>
+                <p className="text-xs uppercase tracking-wide text-white/70">Health score</p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-4">
+              <div className="rounded-lg border border-slate-200 p-4">
+                <p className="text-2xl font-semibold text-ink">{inboxInsightsQuery.data.unread_count}</p>
+                <p className="text-sm text-slate-500">Unread</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-4">
+                <p className="text-2xl font-semibold text-ink">{inboxInsightsQuery.data.high_priority_unread_count}</p>
+                <p className="text-sm text-slate-500">Priority unread</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-4">
+                <p className="text-2xl font-semibold text-ink">{inboxInsightsQuery.data.pending_reply_count}</p>
+                <p className="text-sm text-slate-500">Need reply</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-4">
+                <p className="text-2xl font-semibold text-ink">{inboxInsightsQuery.data.cleanup_candidate_count}</p>
+                <p className="text-sm text-slate-500">Cleanup candidates</p>
+              </div>
+            </div>
+            {inboxInsightsQuery.data.suggestions.length > 0 && (
+              <div className="mt-5 grid gap-3 lg:grid-cols-3">
+                {inboxInsightsQuery.data.suggestions.map((suggestion) => (
+                  <div key={suggestion.suggestion_type} className="rounded-lg border border-slate-200 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="font-semibold text-ink">{suggestion.title}</p>
+                      <span className="rounded-full bg-moss/10 px-2.5 py-1 text-xs font-medium text-moss">
+                        {Math.round(suggestion.confidence * 100)}%
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-600">{suggestion.description}</p>
+                    <p className="mt-3 text-xs text-slate-400">
+                      {suggestion.email_count} emails - saves about {suggestion.estimated_time_saved_minutes} min
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {connectedAccount && summary && summary.total_classified > 0 && (
         <section className="mx-auto max-w-6xl px-6 pb-8">
@@ -378,6 +441,9 @@ export function DashboardPage() {
     </main>
   );
 }
+
+
+
 
 
 
