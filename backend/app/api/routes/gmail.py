@@ -187,6 +187,9 @@ def get_inbox_insights(
         unread_count=health.unread_count,
         high_priority_unread_count=health.high_priority_unread_count,
         pending_reply_count=health.pending_reply_count,
+        aged_follow_up_count=health.aged_follow_up_count,
+        oldest_follow_up_days=health.oldest_follow_up_days,
+        follow_up_age_days=health.follow_up_age_days,
         cleanup_candidate_count=health.cleanup_candidate_count,
         formula=health.formula,
         suggestions=[
@@ -201,6 +204,7 @@ def get_inbox_insights(
                 sender_breakdown=[
                     SenderBreakdownRead(**sender.__dict__) for sender in suggestion.sender_breakdown
                 ],
+                oldest_days_pending=suggestion.oldest_days_pending,
             )
             for suggestion in health.suggestions
         ],
@@ -342,6 +346,7 @@ def _handle_oauth_callback(
     db.commit()
     db.refresh(account)
     return GmailSyncResult(account=account, **stats.__dict__)
+
 
 
 

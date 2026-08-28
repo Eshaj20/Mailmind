@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 import re
 
 from sqlalchemy import select
@@ -12,6 +13,7 @@ from app.models.user import User
 NEWSLETTER_PATTERN = re.compile(r"\b(unsubscribe|newsletter|digest|sale|offer|promotion|coupon)\b", re.I)
 CANDIDATE_EMAIL_LIMIT = 5
 SENDER_BREAKDOWN_LIMIT = 5
+FOLLOW_UP_AGE_DAYS = 3
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,7 @@ class CleanupSuggestion:
     confidence: float
     candidate_emails: list[Email]
     sender_breakdown: list[SenderBreakdown]
+    oldest_days_pending: int | None = None
 
 
 @dataclass(frozen=True)
@@ -39,6 +42,9 @@ class InboxHealth:
     unread_count: int
     high_priority_unread_count: int
     pending_reply_count: int
+    aged_follow_up_count: int
+    oldest_follow_up_days: int | None
+    follow_up_age_days: int
     cleanup_candidate_count: int
     formula: str
     suggestions: list[CleanupSuggestion]
@@ -50,6 +56,7 @@ def build_inbox_health(db: Session, user: User) -> InboxHealth:
     unread = [email for email in emails if not email.is_read]
     high_priority_unread = [email for email in unread if (email.priority or "").lower() == "high"]
     pending_reply = [email for email in emails if email.needs_reply is True]
+    aged_follow_ups = [email for email in pending_reply if _days_since_email(email) >= FOLLOW_UP_AGE_DAYS]
     cleanup_candidates = [email for email in emails if _is_cleanup_candidate(email)]
 
     unread_ratio = len(unread) / total if total else 0.0
@@ -60,6 +67,7 @@ def build_inbox_health(db: Session, user: User) -> InboxHealth:
     score -= round(unread_ratio * 30)
     score -= min(len(high_priority_unread) * 8, 24)
     score -= round(pending_ratio * 25)
+    score -= min(len(aged_follow_ups) * 6, 18)
     score -= round(cleanup_ratio * 20)
     score = max(0, min(100, score))
 
@@ -69,21 +77,40 @@ def build_inbox_health(db: Session, user: User) -> InboxHealth:
         unread_count=len(unread),
         high_priority_unread_count=len(high_priority_unread),
         pending_reply_count=len(pending_reply),
+        aged_follow_up_count=len(aged_follow_ups),
+        oldest_follow_up_days=_oldest_days_pending(aged_follow_ups),
+        follow_up_age_days=FOLLOW_UP_AGE_DAYS,
         cleanup_candidate_count=len(cleanup_candidates),
         formula=(
             "100 - unread_ratio*30 - high_priority_unread*8 "
-            "- pending_reply_ratio*25 - cleanup_candidate_ratio*20"
+            "- pending_reply_ratio*25 - aged_follow_up*6 - cleanup_candidate_ratio*20"
         ),
-        suggestions=_build_cleanup_suggestions(cleanup_candidates, pending_reply, high_priority_unread),
+        suggestions=_build_cleanup_suggestions(cleanup_candidates, pending_reply, aged_follow_ups, high_priority_unread),
     )
 
 
 def _build_cleanup_suggestions(
     cleanup_candidates: list[Email],
     pending_reply: list[Email],
+    aged_follow_ups: list[Email],
     high_priority_unread: list[Email],
 ) -> list[CleanupSuggestion]:
     suggestions: list[CleanupSuggestion] = []
+
+    if aged_follow_ups:
+        suggestions.append(
+            CleanupSuggestion(
+                suggestion_type="stale_follow_up",
+                title="Follow up on older pending replies",
+                description=f"These reply-needed emails are at least {FOLLOW_UP_AGE_DAYS} days old.",
+                email_count=len(aged_follow_ups),
+                estimated_time_saved_minutes=max(1, len(aged_follow_ups)),
+                confidence=0.84,
+                candidate_emails=_top_candidate_emails(aged_follow_ups),
+                sender_breakdown=_sender_breakdown(aged_follow_ups),
+                oldest_days_pending=_oldest_days_pending(aged_follow_ups),
+            )
+        )
 
     if cleanup_candidates:
         suggestions.append(
@@ -110,6 +137,7 @@ def _build_cleanup_suggestions(
                 confidence=0.78,
                 candidate_emails=_top_candidate_emails(pending_reply),
                 sender_breakdown=_sender_breakdown(pending_reply),
+                oldest_days_pending=_oldest_days_pending(pending_reply),
             )
         )
 
@@ -143,6 +171,19 @@ def _sender_breakdown(emails: list[Email]) -> list[SenderBreakdown]:
         SenderBreakdown(sender=sender, count=count)
         for sender, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:SENDER_BREAKDOWN_LIMIT]
     ]
+
+
+def _oldest_days_pending(emails: list[Email]) -> int | None:
+    if not emails:
+        return None
+    return max(_days_since_email(email) for email in emails)
+
+
+def _days_since_email(email: Email) -> int:
+    timestamp = email.received_at or email.created_at
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=UTC)
+    return max(0, (datetime.now(UTC) - timestamp.astimezone(UTC)).days)
 
 
 def _is_cleanup_candidate(email: Email) -> bool:

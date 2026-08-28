@@ -71,6 +71,9 @@ class CleanupSuggestionRead(BaseModel):
     email_count: int
     estimated_time_saved_minutes: int
     confidence: float
+    candidate_emails: list[EmailRead]
+    sender_breakdown: list[SenderBreakdownRead]
+    oldest_days_pending: int | None
 
 
 class InboxHealthRead(BaseModel):
@@ -79,6 +82,9 @@ class InboxHealthRead(BaseModel):
     unread_count: int
     high_priority_unread_count: int
     pending_reply_count: int
+    aged_follow_up_count: int
+    oldest_follow_up_days: int | None
+    follow_up_age_days: int
     cleanup_candidate_count: int
     formula: str
     suggestions: list[CleanupSuggestionRead]
@@ -139,6 +145,7 @@ class SyncJobRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
 
 
 
