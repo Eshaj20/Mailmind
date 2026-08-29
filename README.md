@@ -34,7 +34,7 @@ Week 6 inbox intelligence is in progress:
 
 ## Tech Stack
 
-- Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Pydantic, JWT, Gmail API, Celery, rate-limit guards
+- Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Pydantic, JWT, Gmail API, Celery, rate-limit guards, AI usage ledger
 - Frontend: React, TypeScript, Tailwind CSS, React Query, React Router
 - Infrastructure: Docker Compose, Redis, Celery workers, GitHub Actions, encrypted token storage, Gmail modify scope
 - AI/Search: OpenAI-compatible GPT classification, deterministic local embeddings for offline search, PostgreSQL full-text search, pgvector indexing, hybrid RRF ranking, and formula-based inbox health scoring
@@ -85,7 +85,7 @@ npm run build
 | 4 | AI layer | Labeled eval set, two-stage classification, confidence/model logging, precision/recall/F1 |
 | 5 | Semantic search | Hybrid Postgres full-text + pgvector search with RRF; benchmark vs vector-only and keyword-only |
 | 6 | Inbox intelligence | Health score, cleanup preview, safe Gmail actions, sender insights, and user feedback loop |
-| 7 | Production engineering | Tests, rate limiting, pagination, filtering, monitoring, deployment, cost/token tracking per user |
+| 7 | Production engineering | Tests, rate limiting, AI cost/token tracking per user, pagination/filtering, monitoring, deployment |
 | 8 | Polish | Dashboard, charts, README diagrams, eval numbers, benchmark table, screenshots, demo video |
 
 ## Architecture
@@ -103,6 +103,7 @@ flowchart TD
         CLEANUP[Cleanup Action APIs]
         FEEDBACK[Feedback API]
         EVAL[Evaluation Report API]
+        USAGE[AI Usage API]
     end
 
     subgraph AUTH_FLOW[Authentication]
@@ -132,6 +133,7 @@ flowchart TD
         LABELS --> LOGS[Confidence + Model Version Logs]
         AI --> SUMMARY[Thread Summary]
         EVAL --> REPORT[Precision / Recall / F1 Report]
+        USAGE --> COSTS[Token + Cost Summary]
     end
 
     subgraph SEARCH_FLOW[Week 5 Hybrid Search]
@@ -168,9 +170,11 @@ flowchart TD
     MIRROR --> DB
     HUMAN --> DB
     REPORT --> DASH
+    COSTS --> DASH
     RESULTS --> DASH
     DB --> DASH
-```## Repository Layout
+```
+## Repository Layout
 
 ```text
 MailMind/

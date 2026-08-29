@@ -4,6 +4,7 @@ from sqlalchemy import select
 
 # Import application modules after setting up the environment
 from app.api.deps import get_db, get_gmail_client, get_llm_client
+from app.models.ai_usage import AIUsageLog
 from app.api.deps import get_gmail_client, get_llm_client
 from app.models.gmail import Email, EmailThread
 from app.services.classification import (
@@ -319,3 +320,25 @@ def test_classify_unclassified_emails_service_is_idempotent(db_session):
     # Verify that running classify_unclassified_emails again does not change the classification results for already classified emails, demonstrating idempotency.
     stats_again = classify_unclassified_emails(db_session, user, llm_client=LLMClient(api_key=""))
     assert stats_again.classified_count == 0
+
+
+def test_classification_records_ai_usage_summary(client, db_session):
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClientForClassification()
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    response = client.post("/api/v1/gmail/classify", headers=headers)
+    assert response.status_code == 200
+
+    usage_logs = list(db_session.scalars(select(AIUsageLog)))
+    assert len(usage_logs) == 4  # 2 classifications + 2 thread summaries
+    assert {log.feature for log in usage_logs} == {"classification", "thread_summary"}
+    assert all(log.total_tokens > 0 for log in usage_logs)
+
+    summary = client.get("/api/v1/gmail/ai/usage", headers=headers)
+    assert summary.status_code == 200
+    payload = summary.json()
+    assert payload["total_calls"] == 4
+    assert payload["total_tokens"] == sum(log.total_tokens for log in usage_logs)
+    assert payload["by_feature"]["classification"] == 2
+    assert payload["by_feature"]["thread_summary"] == 2
