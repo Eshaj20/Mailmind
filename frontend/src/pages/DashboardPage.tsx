@@ -1,14 +1,15 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Brain, LogOut, Mail, RefreshCw, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-
 import {
+  applyCleanupAction,
   classifyEmails,
   clearToken,
   getClassificationSummary,
   getCleanupPreview,
   getEmails,
+  getEvaluationReport,
   getGmailAccounts,
   getGmailOAuthUrl,
   getInboxInsights,
@@ -19,6 +20,7 @@ import {
   getToken,
   queueGmailSync,
   searchEmails,
+  submitEmailFeedback,
 } from "../api/client";
 
 const milestones = [
@@ -97,6 +99,12 @@ export function DashboardPage() {
     enabled: hasToken && Boolean(accountsQuery.data?.length),
     retry: false,
   });
+  const evaluationReportQuery = useQuery({
+    queryKey: ["classification-evaluation"],
+    queryFn: getEvaluationReport,
+    enabled: hasToken && Boolean(accountsQuery.data?.length),
+    retry: false,
+  });
   const searchResultsQuery = useQuery({
     queryKey: ["email-search", searchQuery],
     queryFn: () => searchEmails(searchQuery),
@@ -125,6 +133,33 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["sender-insights"] });
     },
   });
+  const cleanupActionMutation = useMutation({
+    mutationFn: ({ emailId, action }: { emailId: number; action: "archive" | "mark_read" }) =>
+      applyCleanupAction([emailId], action),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+      queryClient.invalidateQueries({ queryKey: ["inbox-insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cleanup-preview"] });
+      queryClient.invalidateQueries({ queryKey: ["sender-insights"] });
+    },
+  });
+  const feedbackMutation = useMutation({
+    mutationFn: (emailId: number) =>
+      submitEmailFeedback({
+        email_id: emailId,
+        feedback_type: "not_cleanup",
+        corrected_category: "primary",
+        corrected_priority: "medium",
+        corrected_needs_reply: null,
+        note: "User marked this cleanup suggestion as not useful.",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["classification-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["inbox-insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cleanup-preview"] });
+      queryClient.invalidateQueries({ queryKey: ["sender-insights"] });
+    },
+  });
   const classifyMutation = useMutation({
     mutationFn: classifyEmails,
     onSuccess: () => {
@@ -136,7 +171,6 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["sender-insights"] });
     },
   });
-
   if (!hasToken) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-mint px-6">
@@ -163,6 +197,8 @@ export function DashboardPage() {
   const latestJob = syncJobsQuery.data?.[0];
   const summary = classificationSummaryQuery.data;
   const hasUnclassified = Boolean(summary && summary.total_unclassified > 0);
+  const evalSampleSize = evaluationReportQuery.data?.report_markdown.match(/Sample size: (\d+)/)?.[1];
+  const evalCategoryF1 = evaluationReportQuery.data?.report_markdown.match(/Category[\s\S]*?Macro F1: ([0-9.]+)/)?.[1];
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -380,6 +416,32 @@ export function DashboardPage() {
                       </span>
                     </div>
                     <p className="mt-2 text-xs text-slate-500">{item.reason}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-moss disabled:opacity-60"
+                        type="button"
+                        disabled={cleanupActionMutation.isPending}
+                        onClick={() => cleanupActionMutation.mutate({ emailId: item.email.id, action: "archive" })}
+                      >
+                        Archive
+                      </button>
+                      <button
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                        type="button"
+                        disabled={cleanupActionMutation.isPending}
+                        onClick={() => cleanupActionMutation.mutate({ emailId: item.email.id, action: "mark_read" })}
+                      >
+                        Mark read
+                      </button>
+                      <button
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-50 disabled:opacity-60"
+                        type="button"
+                        disabled={feedbackMutation.isPending}
+                        onClick={() => feedbackMutation.mutate(item.email.id)}
+                      >
+                        Not cleanup
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -420,6 +482,11 @@ export function DashboardPage() {
                 {summary.total_unclassified > 0 ? `, ${summary.total_unclassified} pending` : ""}
               </p>
             </div>
+            {(evalSampleSize || evalCategoryF1) && (
+              <div className="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                Eval set: {evalSampleSize ?? "-"} emails | Category macro F1: {evalCategoryF1 ?? "-"}
+              </div>
+            )}
             <div className="mt-5 grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
               {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
                 <div key={key} className="rounded-lg border border-slate-200 p-4 text-center">

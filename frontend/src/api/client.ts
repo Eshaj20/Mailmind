@@ -54,6 +54,7 @@ export type EmailSearchResponse = {
   query: string;
   results: EmailSearchResult[];
 };
+
 export type ClassificationBatch = {
   classified_count: number;
   by_category: Record<string, number>;
@@ -69,7 +70,6 @@ export type ClassificationSummary = {
   by_priority: Record<string, number>;
   needs_reply_count: number;
 };
-
 
 export type SenderBreakdown = {
   sender: string;
@@ -88,7 +88,6 @@ export type CleanupSuggestion = {
   oldest_days_pending: number | null;
 };
 
-
 export type CleanupPreviewItem = {
   email: Email;
   reason: string;
@@ -102,6 +101,32 @@ export type CleanupPreview = {
   items: CleanupPreviewItem[];
 };
 
+export type CleanupAction = "archive" | "mark_read";
+
+export type CleanupActionResult = {
+  action: CleanupAction;
+  requested_count: number;
+  applied_count: number;
+  skipped_count: number;
+  emails: Email[];
+};
+
+export type EmailFeedback = {
+  id: number;
+  email_id: number;
+  feedback_type: string;
+  original_category: string | null;
+  corrected_category: string | null;
+  original_priority: string | null;
+  corrected_priority: string | null;
+  original_needs_reply: boolean | null;
+  corrected_needs_reply: boolean | null;
+  original_confidence: number | null;
+  model_version: string | null;
+  note: string | null;
+  created_at: string;
+};
+
 export type SenderInsight = {
   sender: string;
   total_emails: number;
@@ -113,6 +138,7 @@ export type SenderInsight = {
   confidence: number;
   candidate_emails: Email[];
 };
+
 export type InboxHealth = {
   score: number;
   total_emails: number;
@@ -126,6 +152,7 @@ export type InboxHealth = {
   formula: string;
   suggestions: CleanupSuggestion[];
 };
+
 export type Thread = {
   id: number;
   gmail_thread_id: string;
@@ -154,6 +181,10 @@ export type SyncJob = {
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
+};
+
+export type EvaluationReport = {
+  report_markdown: string;
 };
 
 export function getToken() {
@@ -229,6 +260,7 @@ export async function getEmails() {
 export async function searchEmails(query: string) {
   return request<EmailSearchResponse>(`/gmail/search?q=${encodeURIComponent(query)}&limit=8`);
 }
+
 export async function queueGmailSync(accountId?: number) {
   const suffix = accountId ? `?account_id=${accountId}` : "";
   return request<SyncJob>(`/gmail/sync${suffix}`, { method: "POST" });
@@ -245,12 +277,38 @@ export async function classifyEmails() {
 export async function getClassificationSummary() {
   return request<ClassificationSummary>("/gmail/classification/summary");
 }
+
+export async function getEvaluationReport() {
+  return request<EvaluationReport>("/gmail/classification/evaluation");
+}
+
 export async function getInboxInsights() {
   return request<InboxHealth>("/gmail/insights");
 }
 
 export async function getCleanupPreview() {
   return request<CleanupPreview>("/gmail/cleanup/preview?limit=10");
+}
+
+export async function applyCleanupAction(emailIds: number[], action: CleanupAction) {
+  return request<CleanupActionResult>("/gmail/cleanup/actions", {
+    method: "POST",
+    body: JSON.stringify({ email_ids: emailIds, action }),
+  });
+}
+
+export async function submitEmailFeedback(payload: {
+  email_id: number;
+  feedback_type?: string;
+  corrected_category?: string | null;
+  corrected_priority?: string | null;
+  corrected_needs_reply?: boolean | null;
+  note?: string | null;
+}) {
+  return request<EmailFeedback>("/gmail/feedback", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getSenderInsights() {
@@ -260,12 +318,3 @@ export async function getSenderInsights() {
 export async function getThreads() {
   return request<Thread[]>("/gmail/threads?limit=10");
 }
-
-
-
-
-
-
-
-
-
