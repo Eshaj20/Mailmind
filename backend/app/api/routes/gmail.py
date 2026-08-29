@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, get_gmail_client, get_llm_client, get_sync_queue
@@ -21,6 +21,7 @@ from app.schemas.gmail import (
     CleanupSuggestionRead,
     EmailFeedbackCreate,
     EmailFeedbackRead,
+    EmailPageRead,
     EmailRead,
     EmailSearchResponse,
     EmailSearchResultRead,
@@ -32,6 +33,7 @@ from app.schemas.gmail import (
     InboxHealthRead,
     SenderBreakdownRead,
     SenderInsightRead,
+    SyncHealthRead,
     SyncJobRead,
     ThreadRead,
 )
@@ -41,6 +43,8 @@ from app.services.feedback import record_email_feedback
 from app.services.gmail import (
     GmailClient,
     GmailSyncError,
+    PermanentGmailSyncError,
+    TransientGmailSyncError,
     create_oauth_state,
     parse_oauth_state,
     sync_latest_messages,
@@ -148,6 +152,35 @@ def list_sync_jobs(
     )
 
 
+
+@router.get("/sync/health", response_model=SyncHealthRead)
+def get_sync_health(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SyncHealthRead:
+    jobs = list(db.scalars(select(SyncJob).where(SyncJob.user_id == current_user.id)))
+    status_counts: dict[str, int] = {}
+    error_counts: dict[str, int] = {}
+    for job in jobs:
+        status_counts[job.status] = status_counts.get(job.status, 0) + 1
+        if job.error_type:
+            error_counts[job.error_type] = error_counts.get(job.error_type, 0) + 1
+
+    latest = max(jobs, key=lambda job: job.created_at, default=None)
+    last_success = max((job.finished_at for job in jobs if job.status == "succeeded" and job.finished_at), default=None)
+    avg_synced_count = round(sum(job.synced_count for job in jobs) / len(jobs), 2) if jobs else 0.0
+    return SyncHealthRead(
+        total_jobs=len(jobs),
+        queued_jobs=status_counts.get("queued", 0),
+        running_jobs=status_counts.get("running", 0),
+        retrying_jobs=status_counts.get("retrying", 0),
+        succeeded_jobs=status_counts.get("succeeded", 0),
+        failed_jobs=status_counts.get("failed", 0),
+        latest_status=latest.status if latest else None,
+        last_sync_at=last_success,
+        avg_synced_count=avg_synced_count,
+        error_counts=error_counts,
+    )
 @router.get("/sync/jobs/{job_id}", response_model=SyncJobRead)
 def get_sync_job(
     job_id: int,
@@ -160,20 +193,46 @@ def get_sync_job(
     return job
 
 
-@router.get("/emails", response_model=list[EmailRead])
+@router.get("/emails", response_model=EmailPageRead)
 def list_emails(
     limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    category: str | None = Query(default=None),
+    priority: str | None = Query(default=None),
+    is_read: bool | None = Query(default=None),
+    needs_reply: bool | None = Query(default=None),
+    sender: str | None = Query(default=None, max_length=200),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[Email]:
-    return list(
+) -> EmailPageRead:
+    query = select(Email).where(Email.user_id == current_user.id)
+    count_query = select(func.count(Email.id)).where(Email.user_id == current_user.id)
+
+    filters = []
+    if category:
+        filters.append(Email.category == category)
+    if priority:
+        filters.append(Email.priority == priority)
+    if is_read is not None:
+        filters.append(Email.is_read == is_read)
+    if needs_reply is not None:
+        filters.append(Email.needs_reply == needs_reply)
+    if sender:
+        filters.append(Email.sender.ilike(f"%{sender}%"))
+
+    for condition in filters:
+        query = query.where(condition)
+        count_query = count_query.where(condition)
+
+    total = int(db.scalar(count_query) or 0)
+    items = list(
         db.scalars(
-            select(Email)
-            .where(Email.user_id == current_user.id)
-            .order_by(desc(Email.received_at), desc(Email.id))
+            query.order_by(desc(Email.received_at), desc(Email.id))
+            .offset(offset)
             .limit(limit)
         )
     )
+    return EmailPageRead(items=items, total=total, limit=limit, offset=offset, has_more=offset + len(items) < total)
 
 
 # Hybrid search combines Postgres full-text results and pgvector semantic results.
@@ -439,6 +498,13 @@ def summarize_thread_endpoint(
     return thread
 
 
+
+def _gmail_error_status(exc: GmailSyncError) -> int:
+    if isinstance(exc, TransientGmailSyncError):
+        return status.HTTP_503_SERVICE_UNAVAILABLE
+    if isinstance(exc, PermanentGmailSyncError):
+        return status.HTTP_400_BAD_REQUEST
+    return status.HTTP_502_BAD_GATEWAY
 def _handle_oauth_callback(
     code: str,
     state: str,

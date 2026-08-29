@@ -56,6 +56,14 @@ class EmailRead(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
+class EmailPageRead(BaseModel):
+    items: list[EmailRead]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
 class EmailSearchResultRead(BaseModel):
     email: EmailRead
     keyword_rank: int | None
@@ -206,6 +214,19 @@ class GmailSyncResult(BaseModel):
     created_count: int
     updated_count: int
 
+
+
+class SyncHealthRead(BaseModel):
+    total_jobs: int
+    queued_jobs: int
+    running_jobs: int
+    retrying_jobs: int
+    succeeded_jobs: int
+    failed_jobs: int
+    latest_status: str | None
+    last_sync_at: datetime | None
+    avg_synced_count: float
+    error_counts: dict[str, int]
 
 class SyncJobRead(BaseModel):
     id: int
