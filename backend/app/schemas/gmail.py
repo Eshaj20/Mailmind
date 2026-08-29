@@ -7,6 +7,17 @@ from pydantic import BaseModel, Field
  
 # These models represent the data for OAuth authorization, Gmail account information, email details, classification summaries, email threads, synchronization results, and synchronization job status. They facilitate data validation and serialization for API responses and requests.
 
+
+class AIUsageSummaryRead(BaseModel):
+    total_calls: int
+    total_input_tokens: int
+    total_output_tokens: int
+    total_tokens: int
+    estimated_cost_usd: float
+    by_feature: dict[str, int]
+    by_model: dict[str, int]
+    since_days: int
+
 class GmailOAuthUrl(BaseModel):
     authorization_url: str
 

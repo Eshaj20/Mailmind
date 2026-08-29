@@ -11,6 +11,7 @@ from app.models.gmail import Email, EmailThread, GmailAccount
 from app.models.sync_job import SyncJob
 from app.models.user import User
 from app.schemas.gmail import (
+    AIUsageSummaryRead,
     ClassificationBatchRead,
     ClassificationSummaryRead,
     CleanupActionRequest,
@@ -49,6 +50,7 @@ from app.services.intelligence import build_cleanup_preview, build_inbox_health,
 from app.services.search import hybrid_search_emails
 from app.services.sync_jobs import create_sync_job
 from app.services.sync_queue import SyncJobQueue
+from app.services.usage import build_ai_usage_summary
 
 router = APIRouter()
 EVALUATION_REPORT_PATH = Path(__file__).resolve().parents[3] / "eval" / "eval_report.md"
@@ -385,6 +387,15 @@ def classification_summary(
     )
 
 
+
+@router.get("/ai/usage", response_model=AIUsageSummaryRead)
+def get_ai_usage_summary(
+    since_days: int = Query(default=30, ge=1, le=365),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AIUsageSummaryRead:
+    summary = build_ai_usage_summary(db=db, user=current_user, since_days=since_days)
+    return AIUsageSummaryRead(**summary.__dict__)
 @router.get("/classification/evaluation", response_model=EvaluationReportRead)
 def get_classification_evaluation(
     current_user: User = Depends(get_current_user),

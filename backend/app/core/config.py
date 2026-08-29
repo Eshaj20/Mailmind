@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     api_rate_limit_per_minute: int = 120
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    openai_input_cost_per_1m_tokens: float = 0.0
+    openai_output_cost_per_1m_tokens: float = 0.0
     # Search knobs: local deterministic embeddings use the same contract as a future OpenAI embedding provider.
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 64

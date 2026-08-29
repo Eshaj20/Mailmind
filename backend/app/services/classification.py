@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.models.classification import EmailClassification
 from app.models.gmail import Email, EmailThread
 from app.models.user import User
+from app.services.usage import estimate_tokens, log_ai_usage
 
 logger = logging.getLogger(__name__)
 
@@ -369,6 +370,20 @@ def classify_email(db: Session, email: Email, llm_client: LLMClient | None = Non
         rationale=result.rationale,
     )
     db.add(log_entry)
+
+    input_tokens = estimate_tokens(email.subject, email.sender, email.snippet, email.body_preview)
+    output_tokens = estimate_tokens(result.category, result.priority, str(result.needs_reply), result.rationale)
+    log_ai_usage(
+        db,
+        user_id=email.user_id,
+        email_id=email.id,
+        feature="classification",
+        stage=result.stage,
+        model_version=result.model_version,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+    )
+
     logger.info(
         "classification.completed",
         extra={
@@ -383,7 +398,6 @@ def classify_email(db: Session, email: Email, llm_client: LLMClient | None = Non
         },
     )
     return log_entry
-
 
 def classify_unclassified_emails(
     db: Session,
@@ -445,6 +459,19 @@ def summarize_thread(db: Session, thread: EmailThread, llm_client: LLMClient | N
     model_version = f"openai:{llm_client.model}" if summary else LIGHTWEIGHT_MODEL_VERSION
     if not summary:
         summary = _extractive_summary(thread.subject, messages)
+
+    input_tokens = estimate_tokens(thread.subject, *(message.snippet for message in messages))
+    output_tokens = estimate_tokens(summary)
+    log_ai_usage(
+        db,
+        user_id=thread.user_id,
+        thread_id=thread.id,
+        feature="thread_summary",
+        stage="llm" if model_version.startswith("openai:") else STAGE_LIGHTWEIGHT,
+        model_version=model_version,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+    )
 
     thread.summary = summary
     thread.summary_model_version = model_version
