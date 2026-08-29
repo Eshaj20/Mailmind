@@ -4,7 +4,7 @@ MailMind is a production-style AI email cleaner and inbox intelligence app. The 
 
 ## Current Milestone
 
-Week 6 inbox intelligence is in progress:
+Week 8 polish and production packaging is in progress:
 
 - FastAPI backend with health, signup, login, and `/me`
 - SQLAlchemy models and Alembic setup
@@ -182,8 +182,11 @@ flowchart TD
 
 ## Supporting Docs
 
+- [API reference](docs/api.md)
+- [System design guide](docs/system-design.md)
 - [Deployment guide](docs/deployment.md)
 - [Search benchmark notes](docs/search-benchmark.md)
+
 ## Repository Layout
 
 ```text
@@ -195,18 +198,13 @@ MailMind/
   frontend/
     src/
   docs/
+    api.md
     architecture.md
+    system-design.md
     roadmap.md
+    deployment.md
+    search-benchmark.md
   .github/
     workflows/
   docker-compose.yml
 ```
-
-
-
-
-
-
-
-
-
