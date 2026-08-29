@@ -16,6 +16,7 @@ import {
   getInboxInsights,
   getMe,
   getSenderInsights,
+  getSyncHealth,
   getSyncJobs,
   getThreads,
   getToken,
@@ -51,6 +52,8 @@ export function DashboardPage() {
   const queryClient = useQueryClient();
   const hasToken = Boolean(getToken());
   const [searchQuery, setSearchQuery] = useState("");
+  const [emailFilters, setEmailFilters] = useState({ category: "", priority: "", is_read: "", needs_reply: "", sender: "", offset: 0 });
+  const [selectedCleanupIds, setSelectedCleanupIds] = useState<number[]>([]);
   const meQuery = useQuery({
     queryKey: ["me"],
     queryFn: getMe,
@@ -64,14 +67,21 @@ export function DashboardPage() {
     retry: false,
   });
   const emailsQuery = useQuery({
-    queryKey: ["emails"],
-    queryFn: getEmails,
+    queryKey: ["emails", emailFilters],
+    queryFn: () => getEmails({ ...emailFilters, limit: 5 }),
     enabled: hasToken && Boolean(accountsQuery.data?.length),
     retry: false,
   });
   const syncJobsQuery = useQuery({
     queryKey: ["sync-jobs"],
     queryFn: getSyncJobs,
+    enabled: hasToken && Boolean(accountsQuery.data?.length),
+    retry: false,
+    refetchInterval: 5000,
+  });
+  const syncHealthQuery = useQuery({
+    queryKey: ["sync-health"],
+    queryFn: getSyncHealth,
     enabled: hasToken && Boolean(accountsQuery.data?.length),
     retry: false,
     refetchInterval: 5000,
@@ -150,6 +160,16 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["sender-insights"] });
     },
   });
+  const bulkCleanupActionMutation = useMutation({
+    mutationFn: (action: "archive" | "mark_read") => applyCleanupAction(selectedCleanupIds, action),
+    onSuccess: () => {
+      setSelectedCleanupIds([]);
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+      queryClient.invalidateQueries({ queryKey: ["inbox-insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cleanup-preview"] });
+      queryClient.invalidateQueries({ queryKey: ["sender-insights"] });
+    },
+  });
   const feedbackMutation = useMutation({
     mutationFn: (emailId: number) =>
       submitEmailFeedback({
@@ -203,6 +223,8 @@ export function DashboardPage() {
   const connectedAccount = accountsQuery.data?.[0];
   const latestJob = syncJobsQuery.data?.[0];
   const summary = classificationSummaryQuery.data;
+  const emailPage = emailsQuery.data;
+  const cleanupPreviewItems = cleanupPreviewQuery.data?.items ?? [];
   const hasUnclassified = Boolean(summary && summary.total_unclassified > 0);
   const evalSampleSize = evaluationReportQuery.data?.report_markdown.match(/Sample size: (\d+)/)?.[1];
   const evalCategoryF1 = evaluationReportQuery.data?.report_markdown.match(/Category[\s\S]*?Macro F1: ([0-9.]+)/)?.[1];
@@ -305,7 +327,20 @@ export function DashboardPage() {
               </p>
             </div>
           )}
-        </aside>
+          {syncHealthQuery.data && (
+            <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 p-3">
+                <p className="font-semibold text-ink">Sync health</p>
+                <p className="mt-1 text-slate-500">
+                  {syncHealthQuery.data.succeeded_jobs} succeeded, {syncHealthQuery.data.retrying_jobs} retrying, {syncHealthQuery.data.failed_jobs} failed
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-3">
+                <p className="font-semibold text-ink">Average sync</p>
+                <p className="mt-1 text-slate-500">{syncHealthQuery.data.avg_synced_count} emails/job</p>
+              </div>
+            </div>
+          )}        </aside>
       </section>
 
 
@@ -410,8 +445,34 @@ export function DashboardPage() {
                   {cleanupPreviewQuery.data.estimated_time_saved_minutes} min
                 </span>
               </div>
-              <div className="mt-5 space-y-3">
-                {cleanupPreviewQuery.data.items.slice(0, 4).map((item) => (
+              {cleanupPreviewItems.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    type="button"
+                    onClick={() => setSelectedCleanupIds(cleanupPreviewItems.map((item) => item.email.id))}
+                  >
+                    Select visible
+                  </button>
+                  <button
+                    className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-moss disabled:opacity-60"
+                    type="button"
+                    disabled={selectedCleanupIds.length === 0 || bulkCleanupActionMutation.isPending}
+                    onClick={() => bulkCleanupActionMutation.mutate("archive")}
+                  >
+                    Archive {selectedCleanupIds.length || "selected"}
+                  </button>
+                  <button
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    type="button"
+                    disabled={selectedCleanupIds.length === 0 || bulkCleanupActionMutation.isPending}
+                    onClick={() => bulkCleanupActionMutation.mutate("mark_read")}
+                  >
+                    Mark read
+                  </button>
+                </div>
+              )}              <div className="mt-5 space-y-3">
+                {cleanupPreviewItems.slice(0, 6).map((item) => (
                   <div key={item.email.id} className="rounded-lg border border-slate-100 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -568,8 +629,35 @@ export function DashboardPage() {
         <section className="mx-auto max-w-6xl px-6 pb-8">
           <div className="rounded-lg border border-slate-200 bg-white p-6">
             <h2 className="text-xl font-semibold text-ink">Latest synced emails</h2>
+            <div className="mt-4 grid gap-3 md:grid-cols-5">
+              <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-moss" value={emailFilters.category} onChange={(event) => setEmailFilters({ ...emailFilters, category: event.target.value, offset: 0 })}>
+                <option value="">All categories</option>
+                <option value="primary">Primary</option>
+                <option value="promotions">Promotions</option>
+                <option value="social">Social</option>
+                <option value="updates">Updates</option>
+                <option value="spam">Spam</option>
+              </select>
+              <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-moss" value={emailFilters.priority} onChange={(event) => setEmailFilters({ ...emailFilters, priority: event.target.value, offset: 0 })}>
+                <option value="">All priorities</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+              <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-moss" value={emailFilters.is_read} onChange={(event) => setEmailFilters({ ...emailFilters, is_read: event.target.value, offset: 0 })}>
+                <option value="">Read state</option>
+                <option value="false">Unread</option>
+                <option value="true">Read</option>
+              </select>
+              <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-moss" value={emailFilters.needs_reply} onChange={(event) => setEmailFilters({ ...emailFilters, needs_reply: event.target.value, offset: 0 })}>
+                <option value="">Reply state</option>
+                <option value="true">Needs reply</option>
+                <option value="false">No reply needed</option>
+              </select>
+              <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-moss" placeholder="Filter sender" value={emailFilters.sender} onChange={(event) => setEmailFilters({ ...emailFilters, sender: event.target.value, offset: 0 })} />
+            </div>
             <div className="mt-5 divide-y divide-slate-100">
-              {(emailsQuery.data ?? []).map((email) => (
+              {(emailPage?.items ?? []).map((email) => (
                 <div key={email.id} className="py-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -604,7 +692,24 @@ export function DashboardPage() {
         </section>
       )}
 
-      {connectedAccount && Boolean(threadsQuery.data?.length) && (
+
+      {connectedAccount && emailPage && emailPage.total > 0 && (
+        <section className="mx-auto max-w-6xl px-6 pb-8">
+          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+            <span>
+              Showing {emailPage.offset + 1}-{emailPage.offset + emailPage.items.length} of {emailPage.total}
+            </span>
+            <div className="flex gap-2">
+              <button className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold disabled:opacity-50" type="button" disabled={emailPage.offset === 0} onClick={() => setEmailFilters({ ...emailFilters, offset: Math.max(0, emailFilters.offset - 5) })}>
+                Previous page
+              </button>
+              <button className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold disabled:opacity-50" type="button" disabled={!emailPage.has_more} onClick={() => setEmailFilters({ ...emailFilters, offset: emailFilters.offset + 5 })}>
+                Next page
+              </button>
+            </div>
+          </div>
+        </section>
+      )}      {connectedAccount && Boolean(threadsQuery.data?.length) && (
         <section className="mx-auto max-w-6xl px-6 pb-8">
           <div className="rounded-lg border border-slate-200 bg-white p-6">
             <h2 className="text-xl font-semibold text-ink">Thread summaries</h2>

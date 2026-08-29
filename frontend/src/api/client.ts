@@ -40,6 +40,24 @@ export type Email = {
   classified_at: string | null;
 };
 
+export type EmailPage = {
+  items: Email[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
+export type EmailFilters = {
+  category?: string;
+  priority?: string;
+  is_read?: string;
+  needs_reply?: string;
+  sender?: string;
+  offset?: number;
+  limit?: number;
+};
+
 export type EmailSearchResult = {
   email: Email;
   keyword_rank: number | null;
@@ -164,6 +182,19 @@ export type Thread = {
   summarized_at: string | null;
 };
 
+export type SyncHealth = {
+  total_jobs: number;
+  queued_jobs: number;
+  running_jobs: number;
+  retrying_jobs: number;
+  succeeded_jobs: number;
+  failed_jobs: number;
+  latest_status: string | null;
+  last_sync_at: string | null;
+  avg_synced_count: number;
+  error_counts: Record<string, number>;
+};
+
 export type SyncJob = {
   id: number;
   user_id: number;
@@ -263,8 +294,17 @@ export async function getGmailAccounts() {
   return request<GmailAccount[]>("/gmail/accounts");
 }
 
-export async function getEmails() {
-  return request<Email[]>("/gmail/emails?limit=5");
+export async function getEmails(filters: EmailFilters = {}) {
+  const params = new URLSearchParams();
+  params.set("limit", String(filters.limit ?? 5));
+  params.set("offset", String(filters.offset ?? 0));
+  for (const key of ["category", "priority", "is_read", "needs_reply", "sender"] as const) {
+    const value = filters[key];
+    if (value !== undefined && value !== "") {
+      params.set(key, value);
+    }
+  }
+  return request<EmailPage>(`/gmail/emails?${params.toString()}`);
 }
 
 export async function searchEmails(query: string) {
@@ -274,6 +314,10 @@ export async function searchEmails(query: string) {
 export async function queueGmailSync(accountId?: number) {
   const suffix = accountId ? `?account_id=${accountId}` : "";
   return request<SyncJob>(`/gmail/sync${suffix}`, { method: "POST" });
+}
+
+export async function getSyncHealth() {
+  return request<SyncHealth>("/gmail/sync/health");
 }
 
 export async function getSyncJobs() {
