@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 import logging
@@ -202,6 +202,26 @@ class GmailClient:
         except Exception as exc:
             raise classify_gmail_exception(exc) from exc
 
+    def modify_message_labels(
+        self,
+        access_token: str,
+        message_id: str,
+        *,
+        add_labels: list[str] | None = None,
+        remove_labels: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Apply Gmail label changes for safe user-confirmed cleanup actions."""
+        try:
+            response = httpx.post(
+                f"{GMAIL_API_BASE}/messages/{message_id}/modify",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json={"addLabelIds": add_labels or [], "removeLabelIds": remove_labels or []},
+                timeout=15,
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as exc:
+            raise classify_gmail_exception(exc) from exc
 
 def classify_gmail_exception(exc: Exception) -> GmailSyncError:
     if isinstance(exc, GmailSyncError):

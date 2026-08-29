@@ -1,4 +1,4 @@
-﻿from datetime import UTC, datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -113,10 +113,4 @@ class Email(Base):
     classifications = relationship(
         "EmailClassification", back_populates="email", cascade="all, delete-orphan"
     )
-
-
-
-
-
-
-
+    feedback = relationship("EmailFeedback", back_populates="email", cascade="all, delete-orphan")

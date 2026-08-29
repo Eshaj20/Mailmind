@@ -1,21 +1,29 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, get_gmail_client, get_llm_client, get_sync_queue
 from app.core.config import settings
+from app.core.rate_limit import enforce_rate_limit
 from app.models.gmail import Email, EmailThread, GmailAccount
 from app.models.sync_job import SyncJob
 from app.models.user import User
 from app.schemas.gmail import (
     ClassificationBatchRead,
     ClassificationSummaryRead,
+    CleanupActionRequest,
+    CleanupActionResultRead,
     CleanupPreviewItemRead,
     CleanupPreviewRead,
     CleanupSuggestionRead,
+    EmailFeedbackCreate,
+    EmailFeedbackRead,
     EmailRead,
     EmailSearchResponse,
     EmailSearchResultRead,
+    EvaluationReportRead,
     GmailAccountRead,
     GmailOAuthCallback,
     GmailOAuthUrl,
@@ -27,8 +35,11 @@ from app.schemas.gmail import (
     ThreadRead,
 )
 from app.services.classification import LLMClient, classify_unclassified_emails, summarize_thread
+from app.services.cleanup_actions import apply_cleanup_action
+from app.services.feedback import record_email_feedback
 from app.services.gmail import (
     GmailClient,
+    GmailSyncError,
     create_oauth_state,
     parse_oauth_state,
     sync_latest_messages,
@@ -40,6 +51,12 @@ from app.services.sync_jobs import create_sync_job
 from app.services.sync_queue import SyncJobQueue
 
 router = APIRouter()
+EVALUATION_REPORT_PATH = Path(__file__).resolve().parents[3] / "eval" / "eval_report.md"
+
+
+def _enforce_expensive_action_limit(request: Request) -> None:
+    enforce_rate_limit(request, limit=settings.api_rate_limit_per_minute)
+
 
 # Fail fast when local/dev env does not have Google OAuth credentials configured.
 def _ensure_google_configured() -> None:
@@ -58,6 +75,7 @@ def oauth_authorize(
     _ensure_google_configured()
     state = create_oauth_state(current_user.id)
     return GmailOAuthUrl(authorization_url=client.authorization_url(state))
+
 
 # GET supports Google's browser redirect; POST keeps the same flow easy to test from API clients.
 @router.get("/oauth/callback", response_model=GmailSyncResult)
@@ -78,6 +96,7 @@ def oauth_callback_post(
 ) -> GmailSyncResult:
     return _handle_oauth_callback(code=payload.code, state=payload.state, db=db, client=client)
 
+
 @router.get("/accounts", response_model=list[GmailAccountRead])
 def list_accounts(
     current_user: User = Depends(get_current_user),
@@ -88,11 +107,13 @@ def list_accounts(
 
 @router.post("/sync", response_model=SyncJobRead, status_code=status.HTTP_202_ACCEPTED)
 def queue_sync(
+    request: Request,
     account_id: int | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     queue: SyncJobQueue = Depends(get_sync_queue),
 ) -> SyncJob:
+    _enforce_expensive_action_limit(request)
     query = select(GmailAccount).where(GmailAccount.user_id == current_user.id)
     if account_id is not None:
         query = query.where(GmailAccount.id == account_id)
@@ -152,6 +173,7 @@ def list_emails(
         )
     )
 
+
 # Hybrid search combines Postgres full-text results and pgvector semantic results.
 @router.get("/search", response_model=EmailSearchResponse)
 def search_emails(
@@ -204,15 +226,12 @@ def get_inbox_insights(
                 estimated_time_saved_minutes=suggestion.estimated_time_saved_minutes,
                 confidence=suggestion.confidence,
                 candidate_emails=suggestion.candidate_emails,
-                sender_breakdown=[
-                    SenderBreakdownRead(**sender.__dict__) for sender in suggestion.sender_breakdown
-                ],
+                sender_breakdown=[SenderBreakdownRead(**sender.__dict__) for sender in suggestion.sender_breakdown],
                 oldest_days_pending=suggestion.oldest_days_pending,
             )
             for suggestion in health.suggestions
         ],
     )
-
 
 
 @router.get("/cleanup/preview", response_model=CleanupPreviewRead)
@@ -234,6 +253,36 @@ def get_cleanup_preview(
             )
             for item in preview.items
         ],
+    )
+
+
+@router.post("/cleanup/actions", response_model=CleanupActionResultRead)
+def apply_cleanup_action_endpoint(
+    payload: CleanupActionRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    client: GmailClient = Depends(get_gmail_client),
+) -> CleanupActionResultRead:
+    _enforce_expensive_action_limit(request)
+    try:
+        result = apply_cleanup_action(
+            db=db,
+            user=current_user,
+            client=client,
+            email_ids=payload.email_ids,
+            action=payload.action,
+        )
+    except GmailSyncError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    db.commit()
+    return CleanupActionResultRead(
+        action=result.action,
+        requested_count=result.requested_count,
+        applied_count=result.applied_count,
+        skipped_count=result.skipped_count,
+        emails=result.emails,
     )
 
 
@@ -260,12 +309,40 @@ def list_sender_insights(
     ]
 
 
+@router.post("/feedback", response_model=EmailFeedbackRead, status_code=status.HTTP_201_CREATED)
+def create_email_feedback(
+    payload: EmailFeedbackCreate,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> EmailFeedbackRead:
+    _enforce_expensive_action_limit(request)
+    result = record_email_feedback(
+        db=db,
+        user=current_user,
+        email_id=payload.email_id,
+        feedback_type=payload.feedback_type,
+        corrected_category=payload.corrected_category,
+        corrected_priority=payload.corrected_priority,
+        corrected_needs_reply=payload.corrected_needs_reply,
+        note=payload.note,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    db.commit()
+    db.refresh(result.feedback)
+    return result.feedback
+
+
 @router.post("/classify", response_model=ClassificationBatchRead)
 def classify_emails(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     llm_client: LLMClient = Depends(get_llm_client),
 ) -> ClassificationBatchRead:
+    _enforce_expensive_action_limit(request)
     stats = classify_unclassified_emails(db, current_user, llm_client=llm_client)
     return ClassificationBatchRead(
         classified_count=stats.classified_count,
@@ -306,6 +383,15 @@ def classification_summary(
         by_priority=by_priority,
         needs_reply_count=needs_reply_count,
     )
+
+
+@router.get("/classification/evaluation", response_model=EvaluationReportRead)
+def get_classification_evaluation(
+    current_user: User = Depends(get_current_user),
+) -> EvaluationReportRead:
+    if not EVALUATION_REPORT_PATH.exists():
+        raise HTTPException(status_code=404, detail="Evaluation report not generated yet")
+    return EvaluationReportRead(report_markdown=EVALUATION_REPORT_PATH.read_text(encoding="utf-8"))
 
 
 @router.get("/threads", response_model=list[ThreadRead])
@@ -395,18 +481,3 @@ def _handle_oauth_callback(
     db.commit()
     db.refresh(account)
     return GmailSyncResult(account=account, **stats.__dict__)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -1,4 +1,5 @@
-﻿from datetime import datetime
+from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -114,6 +115,50 @@ class SenderInsightRead(BaseModel):
     suggested_action: str
     confidence: float
     candidate_emails: list[EmailRead]
+
+
+class CleanupActionRequest(BaseModel):
+    email_ids: list[int] = Field(min_length=1, max_length=100)
+    action: Literal["archive", "mark_read"]
+
+
+class CleanupActionResultRead(BaseModel):
+    action: str
+    requested_count: int
+    applied_count: int
+    skipped_count: int
+    emails: list[EmailRead]
+
+
+class EmailFeedbackCreate(BaseModel):
+    email_id: int
+    feedback_type: str = Field(default="correction", min_length=1, max_length=32)
+    corrected_category: str | None = Field(default=None, max_length=32)
+    corrected_priority: str | None = Field(default=None, max_length=16)
+    corrected_needs_reply: bool | None = None
+    note: str | None = Field(default=None, max_length=500)
+
+
+class EmailFeedbackRead(BaseModel):
+    id: int
+    email_id: int
+    feedback_type: str
+    original_category: str | None
+    corrected_category: str | None
+    original_priority: str | None
+    corrected_priority: str | None
+    original_needs_reply: bool | None
+    corrected_needs_reply: bool | None
+    original_confidence: float | None
+    model_version: str | None
+    note: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class EvaluationReportRead(BaseModel):
+    report_markdown: str
 
 class ClassificationBatchRead(BaseModel):
     classified_count: int
