@@ -6,6 +6,7 @@ import {
   applyCleanupAction,
   classifyEmails,
   clearToken,
+  getAIUsageSummary,
   getClassificationSummary,
   getCleanupPreview,
   getEmails,
@@ -74,6 +75,12 @@ export function DashboardPage() {
     enabled: hasToken && Boolean(accountsQuery.data?.length),
     retry: false,
     refetchInterval: 5000,
+  });
+  const aiUsageQuery = useQuery({
+    queryKey: ["ai-usage"],
+    queryFn: getAIUsageSummary,
+    enabled: hasToken && Boolean(accountsQuery.data?.length),
+    retry: false,
   });
   const classificationSummaryQuery = useQuery({
     queryKey: ["classification-summary"],

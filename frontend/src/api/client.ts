@@ -183,6 +183,16 @@ export type SyncJob = {
   created_at: string;
 };
 
+export type AIUsageSummary = {
+  total_calls: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number;
+  by_feature: Record<string, number>;
+  by_model: Record<string, number>;
+  since_days: number;
+};
 export type EvaluationReport = {
   report_markdown: string;
 };
@@ -278,6 +288,9 @@ export async function getClassificationSummary() {
   return request<ClassificationSummary>("/gmail/classification/summary");
 }
 
+export async function getAIUsageSummary() {
+  return request<AIUsageSummary>("/gmail/ai/usage?since_days=30");
+}
 export async function getEvaluationReport() {
   return request<EvaluationReport>("/gmail/classification/evaluation");
 }
