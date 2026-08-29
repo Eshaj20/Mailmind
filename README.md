@@ -34,6 +34,17 @@ Week 8 polish and production packaging is in progress:
 - Filtered/paginated email API (`GET /api/v1/gmail/emails`) with category, priority, read-state, reply-state, sender, limit, and offset filters
 - Sync health API (`GET /api/v1/gmail/sync/health`) summarizing queued/running/retrying/succeeded/failed jobs and Gmail error counts
 
+## Validation Snapshot
+
+Current AI classification smoke-eval uses the bundled 40-row synthetic seed set in `backend/eval/labeled_emails.csv`:
+
+| Task | Accuracy | Macro F1 |
+| --- | ---: | ---: |
+| Category classification | 0.975 | 0.964 |
+| Priority classification | 0.850 | 0.811 |
+| Needs-reply detection | 0.900 | 0.875 |
+
+Search benchmarking now compares `keyword`, `vector`, and `hybrid` retrieval modes with Hit@1, Hit@3, and MRR. Real search benchmark numbers require a synced inbox plus `backend/eval/search_queries.example.csv` expanded with actual `expected_email_id` labels.
 ## Tech Stack
 
 - Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Pydantic, JWT, Gmail API, Celery, rate-limit guards, AI usage ledger

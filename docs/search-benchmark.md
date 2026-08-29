@@ -16,13 +16,37 @@ Compare:
 
 Use `backend/scripts/benchmark_search.py` with `backend/eval/search_queries.example.csv` or a larger labeled query set.
 
-## Suggested Metrics
+```bash
+cd backend
+python -m scripts.benchmark_search --input eval/search_queries.example.csv --user-email you@example.com
+```
+
+The script writes both:
+
+- `eval/search_benchmark.json` for full per-query details.
+- `eval/search_benchmark.md` for a README-ready summary table.
+
+## Metrics
 
 | Metric | Why it matters |
 | --- | --- |
+| Hit@1 | Whether the top result is the expected email |
 | Hit@3 | Whether a useful email appears quickly |
-| Hit@5 | Whether the result set contains the target email |
 | MRR | Whether the correct result is ranked near the top |
+
+## Output Table
+
+The Markdown report uses this format:
+
+| Mode | Hit@1 | Hit@3 | MRR |
+| --- | ---: | ---: | ---: |
+| keyword | generated after running benchmark | generated after running benchmark | generated after running benchmark |
+| vector | generated after running benchmark | generated after running benchmark | generated after running benchmark |
+| hybrid | generated after running benchmark | generated after running benchmark | generated after running benchmark |
+
+## Current Status
+
+The benchmark implementation is ready, but real search quality numbers need a synced inbox and labeled query set with actual `expected_email_id` values. The included CSV is intentionally tiny and only demonstrates the file format.
 
 ## Interview Talking Point
 

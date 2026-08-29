@@ -23,3 +23,14 @@ To build a real evaluation set:
 Re-run step 4 whenever you change the rule engine, keyword lists, or model
 version to track whether accuracy improved or regressed.
 
+## Current seed-set result
+
+Latest smoke-eval on the bundled 40-row synthetic seed set:
+
+| Task | Accuracy | Macro F1 |
+| --- | ---: | ---: |
+| Category classification | 0.975 | 0.964 |
+| Priority classification | 0.850 | 0.811 |
+| Needs-reply detection | 0.900 | 0.875 |
+
+These are regression/smoke-test numbers, not final production-quality claims. Replace the seed set with 100-150 real hand-labeled emails before using the results as resume metrics.

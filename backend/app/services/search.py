@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -109,13 +109,87 @@ def ensure_user_search_index(db: Session, user: User) -> int:
 
 
 def hybrid_search_emails(db: Session, user: User, query: str, limit: int = 10) -> list[SearchResult]:
+    return search_emails_by_mode(db=db, user=user, query=query, limit=limit, mode="hybrid")
+
+
+def keyword_search_emails(db: Session, user: User, query: str, limit: int = 10) -> list[SearchResult]:
+    return search_emails_by_mode(db=db, user=user, query=query, limit=limit, mode="keyword")
+
+
+def vector_search_emails(db: Session, user: User, query: str, limit: int = 10) -> list[SearchResult]:
+    return search_emails_by_mode(db=db, user=user, query=query, limit=limit, mode="vector")
+
+
+def search_emails_by_mode(
+    db: Session,
+    user: User,
+    query: str,
+    limit: int = 10,
+    mode: str = "hybrid",
+) -> list[SearchResult]:
+    """Run one retrieval strategy for benchmarking or product search.
+
+    The API uses hybrid mode, but the benchmark needs keyword-only and
+    vector-only baselines so we can prove whether RRF improves retrieval.
+    """
+    if mode not in {"keyword", "vector", "hybrid"}:
+        raise ValueError(f"Unsupported search mode: {mode}")
+
     # Search is always scoped by the authenticated MailMind user. This prevents
     # one user's Gmail data from appearing in another user's search results.
     ensure_user_search_index(db, user)
     if _is_postgres(db):
-        return _hybrid_search_postgres(db, user, query, limit)
-    return _hybrid_search_python(db, user, query, limit)
+        return _search_postgres_by_mode(db, user, query, limit, mode)
+    return _search_python_by_mode(db, user, query, limit, mode)
 
+
+def _search_postgres_by_mode(db: Session, user: User, query: str, limit: int, mode: str) -> list[SearchResult]:
+    keyword_rows = _keyword_rows_postgres(db, user, query, limit * 4) if mode in {"keyword", "hybrid"} else []
+    vector_rows = _vector_rows_postgres(db, user, query, limit * 4) if mode in {"vector", "hybrid"} else []
+    return _merge_ranked_rows(db, keyword_rows, vector_rows, limit)
+
+
+def _keyword_rows_postgres(db: Session, user: User, query: str, limit: int):
+    return db.execute(
+        text(
+            """
+            SELECT id,
+                   row_number() OVER (ORDER BY keyword_score DESC, received_at DESC NULLS LAST, id DESC) AS rank,
+                   keyword_score
+            FROM (
+                SELECT id, received_at, ts_rank_cd(search_document, websearch_to_tsquery('english', :query)) AS keyword_score
+                FROM emails
+                WHERE user_id = :user_id
+                  AND search_document @@ websearch_to_tsquery('english', :query)
+            ) ranked
+            ORDER BY rank
+            LIMIT :limit
+            """
+        ),
+        {"query": query, "user_id": user.id, "limit": limit},
+    ).mappings()
+
+
+def _vector_rows_postgres(db: Session, user: User, query: str, limit: int):
+    query_embedding = _vector_literal(embed_text(query))
+    return db.execute(
+        text(
+            """
+            SELECT id,
+                   row_number() OVER (ORDER BY distance ASC, received_at DESC NULLS LAST, id DESC) AS rank,
+                   1 - distance AS vector_score
+            FROM (
+                SELECT id, received_at, search_embedding_vector <=> CAST(:query_embedding AS vector) AS distance
+                FROM emails
+                WHERE user_id = :user_id
+                  AND search_embedding_vector IS NOT NULL
+            ) ranked
+            ORDER BY rank
+            LIMIT :limit
+            """
+        ),
+        {"query_embedding": query_embedding, "user_id": user.id, "limit": limit},
+    ).mappings()
 
 def _hybrid_search_postgres(db: Session, user: User, query: str, limit: int) -> list[SearchResult]:
     # Postgres path: run keyword and semantic retrieval separately, then merge
@@ -161,6 +235,47 @@ def _hybrid_search_postgres(db: Session, user: User, query: str, limit: int) -> 
 
     return _merge_ranked_rows(db, keyword_rows, vector_rows, limit)
 
+
+def _search_python_by_mode(db: Session, user: User, query: str, limit: int, mode: str) -> list[SearchResult]:
+    keyword_rows = _keyword_rows_python(db, user, query) if mode in {"keyword", "hybrid"} else []
+    vector_rows = _vector_rows_python(db, user, query) if mode in {"vector", "hybrid"} else []
+    return _merge_ranked_rows(db, keyword_rows, vector_rows, limit)
+
+
+def _keyword_rows_python(db: Session, user: User, query: str):
+    query_tokens = tokenize(query)
+    emails = list(db.scalars(select(Email).where(Email.user_id == user.id)))
+    keyword_ranked = sorted(
+        [
+            (email, _keyword_score(query_tokens, email.search_text or build_email_search_text(email)))
+            for email in emails
+        ],
+        key=lambda item: (item[1], item[0].received_at or item[0].created_at),
+        reverse=True,
+    )
+    return [
+        {"id": email.id, "rank": rank, "keyword_score": score}
+        for rank, (email, score) in enumerate(keyword_ranked, start=1)
+        if score > 0
+    ]
+
+
+def _vector_rows_python(db: Session, user: User, query: str):
+    query_embedding = embed_text(query)
+    emails = list(db.scalars(select(Email).where(Email.user_id == user.id)))
+    vector_ranked = sorted(
+        [
+            (email, _cosine_similarity(query_embedding, email.search_embedding or []))
+            for email in emails
+        ],
+        key=lambda item: (item[1], item[0].received_at or item[0].created_at),
+        reverse=True,
+    )
+    return [
+        {"id": email.id, "rank": rank, "vector_score": score}
+        for rank, (email, score) in enumerate(vector_ranked, start=1)
+        if score > 0
+    ]
 
 def _hybrid_search_python(db: Session, user: User, query: str, limit: int) -> list[SearchResult]:
     # SQLite/test fallback mirrors the same retrieval idea without pgvector or
@@ -306,4 +421,3 @@ def _vector_literal(vector: list[float]) -> str:
 
 def _is_postgres(db: Session) -> bool:
     return db.bind is not None and db.bind.dialect.name == "postgresql"
-
