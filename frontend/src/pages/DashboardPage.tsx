@@ -7,11 +7,13 @@ import {
   classifyEmails,
   clearToken,
   getClassificationSummary,
+  getCleanupPreview,
   getEmails,
   getGmailAccounts,
   getGmailOAuthUrl,
   getInboxInsights,
   getMe,
+  getSenderInsights,
   getSyncJobs,
   getThreads,
   getToken,
@@ -83,6 +85,18 @@ export function DashboardPage() {
     enabled: hasToken && Boolean(accountsQuery.data?.length),
     retry: false,
   });
+  const cleanupPreviewQuery = useQuery({
+    queryKey: ["cleanup-preview"],
+    queryFn: getCleanupPreview,
+    enabled: hasToken && Boolean(accountsQuery.data?.length),
+    retry: false,
+  });
+  const senderInsightsQuery = useQuery({
+    queryKey: ["sender-insights"],
+    queryFn: getSenderInsights,
+    enabled: hasToken && Boolean(accountsQuery.data?.length),
+    retry: false,
+  });
   const searchResultsQuery = useQuery({
     queryKey: ["email-search", searchQuery],
     queryFn: () => searchEmails(searchQuery),
@@ -107,6 +121,8 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["sync-jobs"] });
       queryClient.invalidateQueries({ queryKey: ["emails"] });
       queryClient.invalidateQueries({ queryKey: ["inbox-insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cleanup-preview"] });
+      queryClient.invalidateQueries({ queryKey: ["sender-insights"] });
     },
   });
   const classifyMutation = useMutation({
@@ -116,6 +132,8 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["emails"] });
       queryClient.invalidateQueries({ queryKey: ["threads"] });
       queryClient.invalidateQueries({ queryKey: ["inbox-insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cleanup-preview"] });
+      queryClient.invalidateQueries({ queryKey: ["sender-insights"] });
     },
   });
 
@@ -333,6 +351,65 @@ export function DashboardPage() {
         </section>
       )}
 
+
+      {connectedAccount && (cleanupPreviewQuery.data || Boolean(senderInsightsQuery.data?.length)) && (
+        <section className="mx-auto grid max-w-6xl gap-6 px-6 pb-8 lg:grid-cols-2">
+          {cleanupPreviewQuery.data && (
+            <div className="rounded-lg border border-slate-200 bg-white p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-ink">Archive preview</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {cleanupPreviewQuery.data.total_candidates} safe candidates before any Gmail action.
+                  </p>
+                </div>
+                <span className="rounded-full bg-moss/10 px-3 py-1 text-sm font-medium text-moss">
+                  {cleanupPreviewQuery.data.estimated_time_saved_minutes} min
+                </span>
+              </div>
+              <div className="mt-5 space-y-3">
+                {cleanupPreviewQuery.data.items.slice(0, 4).map((item) => (
+                  <div key={item.email.id} className="rounded-lg border border-slate-100 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-ink">{item.email.subject ?? "No subject"}</p>
+                        <p className="truncate text-xs text-slate-500">{item.email.sender ?? "Unknown sender"}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                        {Math.round(item.confidence * 100)}%
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">{item.reason}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {Boolean(senderInsightsQuery.data?.length) && (
+            <div className="rounded-lg border border-slate-200 bg-white p-6">
+              <h2 className="text-xl font-semibold text-ink">Sender intelligence</h2>
+              <div className="mt-5 space-y-3">
+                {(senderInsightsQuery.data ?? []).slice(0, 5).map((sender) => (
+                  <div key={sender.sender} className="rounded-lg border border-slate-100 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-ink">{sender.sender}</p>
+                        <p className="text-xs text-slate-500">
+                          {sender.total_emails} emails - {sender.cleanup_candidate_count} cleanup - {sender.unread_count} unread
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-moss/10 px-2.5 py-1 text-xs font-medium text-moss">
+                        {sender.suggested_action.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
       {connectedAccount && summary && summary.total_classified > 0 && (
         <section className="mx-auto max-w-6xl px-6 pb-8">
           <div className="rounded-lg border border-slate-200 bg-white p-6">
@@ -473,6 +550,7 @@ export function DashboardPage() {
     </main>
   );
 }
+
 
 
 
