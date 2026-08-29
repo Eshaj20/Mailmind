@@ -185,8 +185,10 @@ def test_gmail_oauth_callback_persists_first_sync_idempotently(client):
 
     emails = client.get("/api/v1/gmail/emails", headers=headers)
     assert emails.status_code == 200
-    assert len(emails.json()) == 2
-    assert emails.json()[0]["subject"] == "Electricity bill"
+    payload = emails.json()
+    assert payload["total"] == 2
+    assert len(payload["items"]) == 2
+    assert payload["items"][0]["subject"] == "Electricity bill"
 
 # Test that the Gmail sync endpoint correctly queues a sync job and returns the expected response, verifying that the job is enqueued in the fake sync queue.
 def test_gmail_sync_endpoint_queues_job(client):
@@ -455,3 +457,48 @@ def test_large_scale_initial_sync_remains_idempotent_for_500_messages(client, db
     assert second_callback.json()["created_count"] == 0
     assert second_callback.json()["updated_count"] == 500
     assert len(list(db_session.scalars(select(Email)))) == 500
+
+
+def test_email_filters_and_pagination_return_scoped_page(client, db_session):
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    bill_email = db_session.scalar(select(Email).where(Email.gmail_message_id == "msg-2"))
+    bill_email.category = "promotions"
+    bill_email.priority = "low"
+    db_session.commit()
+
+    response = client.get("/api/v1/gmail/emails?category=promotions&priority=low&limit=1&offset=0", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["limit"] == 1
+    assert payload["offset"] == 0
+    assert payload["has_more"] is False
+    assert payload["items"][0]["gmail_message_id"] == "msg-2"
+
+
+def test_sync_health_summarizes_job_statuses(client, db_session):
+    fake_queue = FakeSyncQueue()
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    client.app.dependency_overrides[get_sync_queue] = lambda: fake_queue
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    client.post("/api/v1/gmail/sync", headers=headers)
+    account = db_session.scalar(select(GmailAccount))
+    retrying_job = create_sync_job(db_session, account.user, account)
+    retrying_job.status = "retrying"
+    retrying_job.error_type = "transient_gmail_error"
+    db_session.commit()
+
+    response = client.get("/api/v1/gmail/sync/health", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_jobs"] == 2
+    assert payload["queued_jobs"] == 1
+    assert payload["retrying_jobs"] == 1
+    assert payload["error_counts"]["transient_gmail_error"] == 1

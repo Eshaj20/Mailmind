@@ -31,6 +31,8 @@ Week 6 inbox intelligence is in progress:
 - Cleanup suggestions for low-value newsletters/promotions, aged follow-ups, pending replies, and high-priority unread emails, including top candidate emails and sender breakdowns
 - Safe cleanup preview API (`GET /api/v1/gmail/cleanup/preview`) showing archive candidates, reasons, confidence, and estimated time saved
 - Sender intelligence API (`GET /api/v1/gmail/senders`) grouping inbox noise by sender with suggested review actions
+- Filtered/paginated email API (`GET /api/v1/gmail/emails`) with category, priority, read-state, reply-state, sender, limit, and offset filters
+- Sync health API (`GET /api/v1/gmail/sync/health`) summarizing queued/running/retrying/succeeded/failed jobs and Gmail error counts
 
 ## Tech Stack
 
@@ -98,6 +100,7 @@ flowchart TD
         AUTH[Auth APIs]
         GMAIL[Gmail OAuth APIs]
         SYNC[Sync Job APIs]
+        MONITOR[Sync Health API]
         AI[AI Classification APIs]
         SEARCH[Hybrid Search API]
         CLEANUP[Cleanup Action APIs]
@@ -123,6 +126,7 @@ flowchart TD
         WORKER --> HIST[Gmail historyId Incremental Sync]
         FIRST --> UPSERT[Idempotent Email Upsert]
         HIST --> UPSERT
+        MONITOR --> HEALTH[Job Status + Error Counts]
     end
 
     subgraph AI_FLOW[AI Layer]
@@ -172,8 +176,14 @@ flowchart TD
     REPORT --> DASH
     COSTS --> DASH
     RESULTS --> DASH
+    HEALTH --> DASH
     DB --> DASH
 ```
+
+## Supporting Docs
+
+- [Deployment guide](docs/deployment.md)
+- [Search benchmark notes](docs/search-benchmark.md)
 ## Repository Layout
 
 ```text

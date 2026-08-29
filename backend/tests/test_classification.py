@@ -230,7 +230,7 @@ def test_classify_endpoint_stores_metadata_and_summarizes_threads(client, db_ses
     assert body["needs_reply_count"] == 1
 
     # Verify that the emails and threads are stored in the database with the expected classification metadata
-    emails = client.get("/api/v1/gmail/emails", headers=headers).json()
+    emails = client.get("/api/v1/gmail/emails", headers=headers).json()["items"]
     by_id = {e["gmail_message_id"]: e for e in emails}
     assert by_id["msg-promo"]["category"] == "promotions"
     assert by_id["msg-promo"]["needs_reply"] is False
