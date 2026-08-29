@@ -1,8 +1,9 @@
-﻿from datetime import UTC, datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
 from app.api.deps import get_gmail_client, get_sync_queue
+from app.models.feedback import EmailFeedback
 from app.models.gmail import Email, GmailAccount
 from app.models.sync_job import SyncJob
 from app.services.gmail import GmailMessage, GmailMessageBatch, TransientGmailSyncError, create_oauth_state
@@ -10,6 +11,7 @@ from app.services.sync_jobs import create_sync_job, process_sync_job
 
 # This test file contains tests for the Gmail integration endpoints of the FastAPI application, including OAuth flow, email synchronization, and handling of transient errors during sync jobs.
 class FakeGmailClient:
+    modified_messages: list[dict] = []
     def authorization_url(self, state: str) -> str:
         return f"https://accounts.google.test/oauth?state={state}"
 
@@ -83,6 +85,43 @@ class FakeGmailClient:
         )
 
 # A subclass of FakeGmailClient that simulates a transient error when attempting to refresh the access token, used for testing error handling in sync jobs.
+    def modify_message_labels(
+        self,
+        access_token: str,
+        message_id: str,
+        *,
+        add_labels: list[str] | None = None,
+        remove_labels: list[str] | None = None,
+    ):
+        self.__class__.modified_messages.append(
+            {
+                "access_token": access_token,
+                "message_id": message_id,
+                "add_labels": add_labels or [],
+                "remove_labels": remove_labels or [],
+            }
+        )
+        return {"id": message_id, "labelIds": []}
+
+
+class ManyMessagesGmailClient(FakeGmailClient):
+    def fetch_latest_messages(self, access_token: str, max_results: int):
+        return [
+            GmailMessage(
+                gmail_message_id=f"bulk-msg-{index}",
+                gmail_thread_id=f"bulk-thread-{index % 50}",
+                history_id=f"bulk-history-{index}",
+                sender=f"Sender {index % 20} <sender{index % 20}@example.com>",
+                recipients="esha@gmail.com",
+                subject=f"Newsletter issue {index}",
+                snippet="Weekly digest with unsubscribe link.",
+                body_preview="Weekly digest with unsubscribe link.",
+                labels=["INBOX", "UNREAD"] if index % 3 == 0 else ["INBOX"],
+                received_at=datetime(2026, 7, 21, 10, index % 60, tzinfo=UTC),
+            )
+            for index in range(500)
+        ]
+
 class FailingGmailClient(FakeGmailClient):
     def refresh_access_token(self, refresh_token: str) -> str:
         raise TransientGmailSyncError("temporary timeout")
@@ -327,3 +366,92 @@ def test_sender_insights_group_emails_by_sender(client, db_session):
     assert bills["cleanup_candidate_count"] == 1
     assert bills["suggested_action"] == "bulk_archive_review"
     assert bills["candidate_emails"][0]["gmail_message_id"] == "msg-2"
+
+
+def test_cleanup_action_archives_selected_email_and_updates_local_labels(client, db_session):
+    FakeGmailClient.modified_messages = []
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    bill_email = db_session.scalar(select(Email).where(Email.gmail_message_id == "msg-2"))
+    assert "INBOX" in bill_email.labels
+
+    response = client.post(
+        "/api/v1/gmail/cleanup/actions",
+        headers=headers,
+        json={"email_ids": [bill_email.id], "action": "archive"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["action"] == "archive"
+    assert payload["requested_count"] == 1
+    assert payload["applied_count"] == 1
+    assert payload["skipped_count"] == 0
+    assert payload["emails"][0]["gmail_message_id"] == "msg-2"
+    db_session.refresh(bill_email)
+    assert "INBOX" not in bill_email.labels
+    assert FakeGmailClient.modified_messages[-1]["remove_labels"] == ["INBOX"]
+
+
+def test_feedback_endpoint_logs_correction_and_updates_email_snapshot(client, db_session):
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    bill_email = db_session.scalar(select(Email).where(Email.gmail_message_id == "msg-2"))
+    bill_email.category = "promotions"
+    bill_email.priority = "low"
+    bill_email.needs_reply = False
+    bill_email.classification_confidence = 0.9
+    bill_email.classification_model_version = "rule-engine-v1"
+    db_session.commit()
+
+    response = client.post(
+        "/api/v1/gmail/feedback",
+        headers=headers,
+        json={
+            "email_id": bill_email.id,
+            "feedback_type": "not_cleanup",
+            "corrected_category": "primary",
+            "corrected_priority": "medium",
+            "corrected_needs_reply": True,
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["original_category"] == "promotions"
+    assert payload["corrected_category"] == "primary"
+    assert payload["model_version"] == "rule-engine-v1"
+    assert db_session.scalar(select(EmailFeedback).where(EmailFeedback.email_id == bill_email.id)) is not None
+    db_session.refresh(bill_email)
+    assert bill_email.category == "primary"
+    assert bill_email.priority == "medium"
+    assert bill_email.needs_reply is True
+
+
+def test_classification_evaluation_report_is_visible(client):
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    headers = _auth_headers(client)
+
+    response = client.get("/api/v1/gmail/classification/evaluation", headers=headers)
+
+    assert response.status_code == 200
+    assert "Sample size: 40" in response.json()["report_markdown"]
+    assert "Macro F1" in response.json()["report_markdown"]
+
+
+def test_large_scale_initial_sync_remains_idempotent_for_500_messages(client, db_session):
+    client.app.dependency_overrides[get_gmail_client] = lambda: ManyMessagesGmailClient()
+    _auth_headers(client)
+
+    first_callback = _connect_gmail(client)
+    second_callback = _connect_gmail(client)
+
+    assert first_callback.json()["created_count"] == 500
+    assert first_callback.json()["updated_count"] == 0
+    assert second_callback.json()["created_count"] == 0
+    assert second_callback.json()["updated_count"] == 500
+    assert len(list(db_session.scalars(select(Email)))) == 500

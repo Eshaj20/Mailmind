@@ -1,4 +1,4 @@
-﻿# MailMind
+# MailMind
 
 MailMind is a production-style AI email cleaner and inbox intelligence app. The first milestone is a deployable SaaS skeleton with FastAPI, PostgreSQL, JWT authentication, React, Docker Compose, tests, and a clear path toward Gmail sync and AI features.
 
@@ -34,9 +34,9 @@ Week 6 inbox intelligence is in progress:
 
 ## Tech Stack
 
-- Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Pydantic, JWT, Gmail API, Celery
+- Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Pydantic, JWT, Gmail API, Celery, rate-limit guards
 - Frontend: React, TypeScript, Tailwind CSS, React Query, React Router
-- Infrastructure: Docker Compose, Redis, Celery workers, GitHub Actions, encrypted token storage
+- Infrastructure: Docker Compose, Redis, Celery workers, GitHub Actions, encrypted token storage, Gmail modify scope
 - AI/Search: OpenAI-compatible GPT classification, deterministic local embeddings for offline search, PostgreSQL full-text search, pgvector indexing, hybrid RRF ranking, and formula-based inbox health scoring
 
 ## Quick Start
@@ -84,7 +84,7 @@ npm run build
 | 3 | Sync engine | Incremental sync, idempotent re-sync, Redis/Celery workers, retries, logging |
 | 4 | AI layer | Labeled eval set, two-stage classification, confidence/model logging, precision/recall/F1 |
 | 5 | Semantic search | Hybrid Postgres full-text + pgvector search with RRF; benchmark vs vector-only and keyword-only |
-| 6 | Inbox intelligence | Health score formula: unread ratio + avg response time + still-mailing-after-unsubscribe count |
+| 6 | Inbox intelligence | Health score, cleanup preview, safe Gmail actions, sender insights, and user feedback loop |
 | 7 | Production engineering | Tests, rate limiting, pagination, filtering, monitoring, deployment, cost/token tracking per user |
 | 8 | Polish | Dashboard, charts, README diagrams, eval numbers, benchmark table, screenshots, demo video |
 
@@ -100,6 +100,9 @@ flowchart TD
         SYNC[Sync Job APIs]
         AI[AI Classification APIs]
         SEARCH[Hybrid Search API]
+        CLEANUP[Cleanup Action APIs]
+        FEEDBACK[Feedback API]
+        EVAL[Evaluation Report API]
     end
 
     subgraph AUTH_FLOW[Authentication]
@@ -128,6 +131,7 @@ flowchart TD
         LLM --> LABELS
         LABELS --> LOGS[Confidence + Model Version Logs]
         AI --> SUMMARY[Thread Summary]
+        EVAL --> REPORT[Precision / Recall / F1 Report]
     end
 
     subgraph SEARCH_FLOW[Week 5 Hybrid Search]
@@ -137,7 +141,15 @@ flowchart TD
         FTS --> RRF[Reciprocal Rank Fusion]
         VEC --> RRF
         RRF --> RESULTS[Ranked Email Results]
-        BENCH[Benchmark Script: Hit@K + MRR] -.-> SEARCH
+    end
+
+    subgraph CLEANUP_FLOW[Week 6 Cleanup Intelligence]
+        DASH --> PREVIEW[Review Cleanup Candidates]
+        PREVIEW --> CLEANUP
+        CLEANUP --> MODIFY[Gmail Modify: remove INBOX / UNREAD]
+        MODIFY --> MIRROR[Mirror Labels + Read State Locally]
+        DASH --> FEEDBACK
+        FEEDBACK --> HUMAN[Human Correction Log]
     end
 
     GM[Gmail API]
@@ -145,6 +157,7 @@ flowchart TD
     GMAIL --> GM
     FIRST --> GM
     WORKER --> GM
+    MODIFY --> GM
     ENC --> DB
     UPSERT --> DB
     LABELS --> DB
@@ -152,10 +165,12 @@ flowchart TD
     SUMMARY --> DB
     FTS --> DB
     VEC --> DB
+    MIRROR --> DB
+    HUMAN --> DB
+    REPORT --> DASH
     RESULTS --> DASH
     DB --> DASH
-```
-## Repository Layout
+```## Repository Layout
 
 ```text
 MailMind/
