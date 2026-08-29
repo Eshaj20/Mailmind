@@ -29,6 +29,8 @@ Week 6 inbox intelligence is in progress:
 - Dashboard search panel showing RRF score, keyword rank, semantic rank, and match reason
 - Inbox health API (`GET /api/v1/gmail/insights`) with an explicit formula using unread ratio, high-priority unread emails, pending replies, and cleanup candidates
 - Cleanup suggestions for low-value newsletters/promotions, aged follow-ups, pending replies, and high-priority unread emails, including top candidate emails and sender breakdowns
+- Safe cleanup preview API (`GET /api/v1/gmail/cleanup/preview`) showing archive candidates, reasons, confidence, and estimated time saved
+- Sender intelligence API (`GET /api/v1/gmail/senders`) grouping inbox noise by sender with suggested review actions
 
 ## Tech Stack
 
@@ -170,6 +172,7 @@ MailMind/
     workflows/
   docker-compose.yml
 ```
+
 
 
 

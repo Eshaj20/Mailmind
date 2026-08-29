@@ -284,3 +284,46 @@ def test_inbox_insights_returns_health_score_and_cleanup_suggestions(client, db_
     assert suggestions["archive_low_value"]["sender_breakdown"][0]["sender"] == "Bills <billing@example.com>"
 
 
+
+
+def test_cleanup_preview_returns_actionable_archive_candidates(client, db_session):
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    bill_email = db_session.scalar(select(Email).where(Email.gmail_message_id == "msg-2"))
+    bill_email.category = "promotions"
+    bill_email.priority = "low"
+    db_session.commit()
+
+    response = client.get("/api/v1/gmail/cleanup/preview", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_candidates"] == 1
+    assert payload["estimated_time_saved_minutes"] == 0
+    assert payload["items"][0]["email"]["gmail_message_id"] == "msg-2"
+    assert payload["items"][0]["suggested_action"] == "archive"
+    assert payload["items"][0]["reason"] == "Classified as promotions."
+    assert payload["items"][0]["confidence"] == 0.9
+
+
+def test_sender_insights_group_emails_by_sender(client, db_session):
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    bill_email = db_session.scalar(select(Email).where(Email.gmail_message_id == "msg-2"))
+    bill_email.category = "promotions"
+    bill_email.priority = "low"
+    db_session.commit()
+
+    response = client.get("/api/v1/gmail/senders", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    bills = next(sender for sender in payload if sender["sender"] == "Bills <billing@example.com>")
+    assert bills["total_emails"] == 1
+    assert bills["cleanup_candidate_count"] == 1
+    assert bills["suggested_action"] == "bulk_archive_review"
+    assert bills["candidate_emails"][0]["gmail_message_id"] == "msg-2"
