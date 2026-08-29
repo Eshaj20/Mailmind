@@ -10,6 +10,8 @@ from app.models.user import User
 from app.schemas.gmail import (
     ClassificationBatchRead,
     ClassificationSummaryRead,
+    CleanupPreviewItemRead,
+    CleanupPreviewRead,
     CleanupSuggestionRead,
     EmailRead,
     EmailSearchResponse,
@@ -20,6 +22,7 @@ from app.schemas.gmail import (
     GmailSyncResult,
     InboxHealthRead,
     SenderBreakdownRead,
+    SenderInsightRead,
     SyncJobRead,
     ThreadRead,
 )
@@ -31,7 +34,7 @@ from app.services.gmail import (
     sync_latest_messages,
     upsert_gmail_account,
 )
-from app.services.intelligence import build_inbox_health
+from app.services.intelligence import build_cleanup_preview, build_inbox_health, build_sender_intelligence
 from app.services.search import hybrid_search_emails
 from app.services.sync_jobs import create_sync_job
 from app.services.sync_queue import SyncJobQueue
@@ -211,6 +214,52 @@ def get_inbox_insights(
     )
 
 
+
+@router.get("/cleanup/preview", response_model=CleanupPreviewRead)
+def get_cleanup_preview(
+    limit: int = Query(default=25, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CleanupPreviewRead:
+    preview = build_cleanup_preview(db=db, user=current_user, limit=limit)
+    return CleanupPreviewRead(
+        total_candidates=preview.total_candidates,
+        estimated_time_saved_minutes=preview.estimated_time_saved_minutes,
+        items=[
+            CleanupPreviewItemRead(
+                email=item.email,
+                reason=item.reason,
+                suggested_action=item.suggested_action,
+                confidence=item.confidence,
+            )
+            for item in preview.items
+        ],
+    )
+
+
+@router.get("/senders", response_model=list[SenderInsightRead])
+def list_sender_insights(
+    limit: int = Query(default=10, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[SenderInsightRead]:
+    insights = build_sender_intelligence(db=db, user=current_user, limit=limit)
+    return [
+        SenderInsightRead(
+            sender=insight.sender,
+            total_emails=insight.total_emails,
+            unread_count=insight.unread_count,
+            cleanup_candidate_count=insight.cleanup_candidate_count,
+            pending_reply_count=insight.pending_reply_count,
+            last_seen_at=insight.last_seen_at,
+            suggested_action=insight.suggested_action,
+            confidence=insight.confidence,
+            candidate_emails=insight.candidate_emails,
+        )
+        for insight in insights
+    ]
+
+
 @router.post("/classify", response_model=ClassificationBatchRead)
 def classify_emails(
     current_user: User = Depends(get_current_user),
@@ -346,6 +395,9 @@ def _handle_oauth_callback(
     db.commit()
     db.refresh(account)
     return GmailSyncResult(account=account, **stats.__dict__)
+
+
+
 
 
 

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -36,6 +36,34 @@ class CleanupSuggestion:
 
 
 @dataclass(frozen=True)
+class CleanupPreviewItem:
+    email: Email
+    reason: str
+    suggested_action: str
+    confidence: float
+
+
+@dataclass(frozen=True)
+class CleanupPreview:
+    total_candidates: int
+    estimated_time_saved_minutes: int
+    items: list[CleanupPreviewItem]
+
+
+@dataclass(frozen=True)
+class SenderInsight:
+    sender: str
+    total_emails: int
+    unread_count: int
+    cleanup_candidate_count: int
+    pending_reply_count: int
+    last_seen_at: datetime | None
+    suggested_action: str
+    confidence: float
+    candidate_emails: list[Email]
+
+
+@dataclass(frozen=True)
 class InboxHealth:
     score: int
     total_emails: int
@@ -51,13 +79,13 @@ class InboxHealth:
 
 
 def build_inbox_health(db: Session, user: User) -> InboxHealth:
-    emails = list(db.scalars(select(Email).where(Email.user_id == user.id)))
+    emails = _user_emails(db, user)
     total = len(emails)
     unread = [email for email in emails if not email.is_read]
     high_priority_unread = [email for email in unread if (email.priority or "").lower() == "high"]
     pending_reply = [email for email in emails if email.needs_reply is True]
     aged_follow_ups = [email for email in pending_reply if _days_since_email(email) >= FOLLOW_UP_AGE_DAYS]
-    cleanup_candidates = [email for email in emails if _is_cleanup_candidate(email)]
+    cleanup_candidates = [email for email in emails if is_cleanup_candidate(email)]
 
     unread_ratio = len(unread) / total if total else 0.0
     cleanup_ratio = len(cleanup_candidates) / total if total else 0.0
@@ -87,6 +115,67 @@ def build_inbox_health(db: Session, user: User) -> InboxHealth:
         ),
         suggestions=_build_cleanup_suggestions(cleanup_candidates, pending_reply, aged_follow_ups, high_priority_unread),
     )
+
+
+def build_cleanup_preview(db: Session, user: User, limit: int = 25) -> CleanupPreview:
+    candidates = [email for email in _user_emails(db, user) if is_cleanup_candidate(email)]
+    ranked = sorted(candidates, key=lambda email: (_cleanup_confidence(email), email.received_at or email.created_at), reverse=True)
+    items = [
+        CleanupPreviewItem(
+            email=email,
+            reason=_cleanup_reason(email),
+            suggested_action="archive",
+            confidence=_cleanup_confidence(email),
+        )
+        for email in ranked[:limit]
+    ]
+    return CleanupPreview(
+        total_candidates=len(candidates),
+        estimated_time_saved_minutes=max(0, round(len(candidates) * 0.5)),
+        items=items,
+    )
+
+
+def build_sender_intelligence(db: Session, user: User, limit: int = 10) -> list[SenderInsight]:
+    grouped: dict[str, list[Email]] = {}
+    for email in _user_emails(db, user):
+        grouped.setdefault(email.sender or "Unknown sender", []).append(email)
+
+    insights: list[SenderInsight] = []
+    for sender, emails in grouped.items():
+        cleanup_candidates = [email for email in emails if is_cleanup_candidate(email)]
+        pending_reply = [email for email in emails if email.needs_reply is True]
+        unread_count = sum(1 for email in emails if not email.is_read)
+        last_seen_at = max((email.received_at or email.created_at for email in emails), default=None)
+        cleanup_ratio = len(cleanup_candidates) / len(emails) if emails else 0.0
+        suggested_action = "review"
+        confidence = 0.55
+        if cleanup_candidates and cleanup_ratio >= 0.6:
+            suggested_action = "bulk_archive_review"
+            confidence = min(0.95, 0.7 + cleanup_ratio * 0.2)
+        elif pending_reply:
+            suggested_action = "follow_up_review"
+            confidence = 0.76
+
+        insights.append(
+            SenderInsight(
+                sender=sender,
+                total_emails=len(emails),
+                unread_count=unread_count,
+                cleanup_candidate_count=len(cleanup_candidates),
+                pending_reply_count=len(pending_reply),
+                last_seen_at=last_seen_at,
+                suggested_action=suggested_action,
+                confidence=round(confidence, 2),
+                candidate_emails=_top_candidate_emails(cleanup_candidates or emails),
+            )
+        )
+
+    return sorted(
+        insights,
+        key=lambda item: (item.cleanup_candidate_count, item.unread_count, item.total_emails, item.last_seen_at or datetime.min.replace(tzinfo=UTC)),
+        reverse=True,
+    )[:limit]
 
 
 def _build_cleanup_suggestions(
@@ -158,6 +247,10 @@ def _build_cleanup_suggestions(
     return suggestions
 
 
+def _user_emails(db: Session, user: User) -> list[Email]:
+    return list(db.scalars(select(Email).where(Email.user_id == user.id)))
+
+
 def _top_candidate_emails(emails: list[Email]) -> list[Email]:
     return sorted(emails, key=lambda email: email.received_at or email.created_at, reverse=True)[:CANDIDATE_EMAIL_LIMIT]
 
@@ -186,7 +279,7 @@ def _days_since_email(email: Email) -> int:
     return max(0, (datetime.now(UTC) - timestamp.astimezone(UTC)).days)
 
 
-def _is_cleanup_candidate(email: Email) -> bool:
+def is_cleanup_candidate(email: Email) -> bool:
     category = (email.category or "").lower()
     priority = (email.priority or "").lower()
     text = " ".join(part or "" for part in [email.sender, email.subject, email.snippet, email.body_preview])
@@ -195,3 +288,25 @@ def _is_cleanup_candidate(email: Email) -> bool:
         or NEWSLETTER_PATTERN.search(text) is not None
         or (category == "updates" and priority == "low")
     )
+
+
+def _cleanup_reason(email: Email) -> str:
+    category = (email.category or "").lower()
+    priority = (email.priority or "").lower()
+    text = " ".join(part or "" for part in [email.subject, email.snippet, email.body_preview])
+    if category in {"promotions", "social", "spam"}:
+        return f"Classified as {category}."
+    if category == "updates" and priority == "low":
+        return "Low-priority update."
+    if NEWSLETTER_PATTERN.search(text):
+        return "Newsletter or promotional language detected."
+    return "Low-value cleanup candidate."
+
+
+def _cleanup_confidence(email: Email) -> float:
+    category = (email.category or "").lower()
+    if category in {"promotions", "spam"}:
+        return 0.9
+    if category in {"social", "updates"}:
+        return 0.78
+    return 0.7

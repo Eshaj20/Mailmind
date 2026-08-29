@@ -90,6 +90,31 @@ class InboxHealthRead(BaseModel):
     suggestions: list[CleanupSuggestionRead]
 
 
+
+class CleanupPreviewItemRead(BaseModel):
+    email: EmailRead
+    reason: str
+    suggested_action: str
+    confidence: float
+
+
+class CleanupPreviewRead(BaseModel):
+    total_candidates: int
+    estimated_time_saved_minutes: int
+    items: list[CleanupPreviewItemRead]
+
+
+class SenderInsightRead(BaseModel):
+    sender: str
+    total_emails: int
+    unread_count: int
+    cleanup_candidate_count: int
+    pending_reply_count: int
+    last_seen_at: datetime | None
+    suggested_action: str
+    confidence: float
+    candidate_emails: list[EmailRead]
+
 class ClassificationBatchRead(BaseModel):
     classified_count: int
     by_category: dict[str, int]
@@ -145,6 +170,8 @@ class SyncJobRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
 
 
 
