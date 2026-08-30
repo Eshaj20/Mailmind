@@ -7,7 +7,7 @@ from app.db.session import Base
 
 # The SyncJob class represents a synchronization job for a user's Gmail account. It is used to track the status and progress of email synchronization tasks, including the number of attempts, synced emails, created and updated counts, and any errors encountered during the process. 
 
-# The class includes fields for user ID, Gmail account ID, job type, status, attempt count, maximum attempts, per-job Gmail fetch limit, synced count, created count, updated count, Celery task ID, error type, error message, start and finish timestamps, and creation and update timestamps. It establishes relationships with the User and GmailAccount models for easy access to related data.
+# The class includes fields for user ID, Gmail account ID, job type, status, attempt count, maximum attempts, per-job Gmail fetch limit, processed count, synced count, created count, updated count, Celery task ID, error type, error message, start and finish timestamps, and creation and update timestamps. It establishes relationships with the User and GmailAccount models for easy access to related data.
 class SyncJob(Base):
     __tablename__ = "sync_jobs"
 
@@ -19,6 +19,7 @@ class SyncJob(Base):
     attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     max_attempts: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     max_results: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    processed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     synced_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     updated_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -41,3 +42,9 @@ class SyncJob(Base):
 
     user = relationship("User")
     gmail_account = relationship("GmailAccount")
+
+    @property
+    def progress_percent(self) -> int:
+        if self.max_results <= 0:
+            return 0
+        return min(100, round((self.processed_count / self.max_results) * 100))

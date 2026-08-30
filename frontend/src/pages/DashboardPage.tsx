@@ -222,6 +222,13 @@ export function DashboardPage() {
   }
 
   const connectedAccount = accountsQuery.data?.[0];
+  const isDemoWorkspace = connectedAccount?.google_email.endsWith("@mailmind.local") ?? false;
+  const workspaceMode = isDemoWorkspace ? "Demo Inbox Mode" : connectedAccount ? "Real Gmail Mode" : "Setup Mode";
+  const workspaceModeCopy = isDemoWorkspace
+    ? "Synthetic emails for safe recruiter/user walkthroughs. No personal Gmail data is exposed."
+    : connectedAccount
+      ? "Real Gmail account connected through OAuth. Cleanup actions require explicit review."
+      : "Connect Gmail or seed demo data to start exploring MailMind.";
   const latestJob = syncJobsQuery.data?.[0];
   const summary = classificationSummaryQuery.data;
   const emailPage = emailsQuery.data;
@@ -253,6 +260,13 @@ export function DashboardPage() {
           </button>
         </div>
       </header>
+
+      <section className="mx-auto max-w-6xl px-6 pt-8">
+        <div className={`rounded-lg border p-4 ${isDemoWorkspace ? "border-amber-200 bg-amber-50" : connectedAccount ? "border-moss/20 bg-moss/10" : "border-slate-200 bg-white"}`}>
+          <p className="text-sm font-semibold text-ink">{workspaceMode}</p>
+          <p className="mt-1 text-sm text-slate-600">{workspaceModeCopy}</p>
+        </div>
+      </section>
 
       <section className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-lg border border-slate-200 bg-white p-6">
@@ -334,9 +348,13 @@ export function DashboardPage() {
             <div className="mt-5 rounded-lg border border-slate-200 p-4 text-sm">
               <p className="font-semibold text-ink">Latest sync: {latestJob.status}</p>
               <p className="mt-1 text-slate-500">
-                {latestJob.created_count} created, {latestJob.updated_count} updated, limit {latestJob.max_results}, attempt {latestJob.attempt_count}
+                {latestJob.processed_count}/{latestJob.max_results} processed, {latestJob.created_count} created, {latestJob.updated_count} updated, attempt {latestJob.attempt_count}
                 /{latestJob.max_attempts}
               </p>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full bg-moss" style={{ width: `${latestJob.progress_percent}%` }} />
+              </div>
+              <p className="mt-1 text-xs text-slate-500">{latestJob.progress_percent}% complete</p>
             </div>
           )}
           {syncHealthQuery.data && (

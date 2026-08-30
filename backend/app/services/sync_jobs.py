@@ -62,6 +62,7 @@ def process_sync_job(
 
     started = time.perf_counter()
     job.status = SYNC_STATUS_RUNNING
+    job.processed_count = 0
     job.attempt_count += 1
     job.started_at = job.started_at or datetime.now(UTC)
     job.error_type = None
@@ -105,6 +106,7 @@ def process_sync_job(
 def _mark_succeeded(db: Session, job: SyncJob, stats: GmailSyncStats, started: float) -> None:
     job.status = SYNC_STATUS_SUCCEEDED
     job.synced_count = stats.synced_count
+    job.processed_count = stats.synced_count
     job.created_count = stats.created_count
     job.updated_count = stats.updated_count
     job.finished_at = datetime.now(UTC)

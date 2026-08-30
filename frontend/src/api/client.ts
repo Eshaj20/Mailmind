@@ -204,6 +204,8 @@ export type SyncJob = {
   attempt_count: number;
   max_attempts: number;
   max_results: number;
+  processed_count: number;
+  progress_percent: number;
   synced_count: number;
   created_count: number;
   updated_count: number;

@@ -202,6 +202,8 @@ def test_gmail_sync_endpoint_queues_job(client):
     assert response.status_code == 202
     assert response.json()["status"] == "queued"
     assert response.json()["celery_task_id"] == "fake-celery-task"
+    assert response.json()["processed_count"] == 0
+    assert response.json()["progress_percent"] == 0
     assert fake_queue.enqueued == [response.json()["id"]]
 
     jobs = client.get("/api/v1/gmail/sync/jobs", headers=headers)
@@ -224,6 +226,8 @@ def test_process_sync_job_uses_history_id_incrementally(client, db_session):
     assert processed.status == "succeeded"
     assert processed.created_count == 1
     assert processed.updated_count == 0
+    assert processed.processed_count == 1
+    assert processed.progress_percent == 4
     assert account.history_id == "history-4"
     assert db_session.scalar(select(Email).where(Email.gmail_message_id == "msg-3")) is not None
 

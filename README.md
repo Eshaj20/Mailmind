@@ -34,6 +34,7 @@ Week 8 polish and production packaging is in progress:
 - Filtered/paginated email API (`GET /api/v1/gmail/emails`) with category, priority, read-state, reply-state, sender, limit, and offset filters
 - Sync health API (`GET /api/v1/gmail/sync/health`) summarizing queued/running/retrying/succeeded/failed jobs and Gmail error counts
 - Staged real-inbox sync limits (`POST /api/v1/gmail/sync?max_results=100`) for safe 25 -> 100 -> 500+ Gmail benchmarking
+- Product mode banner and sync progress display for demo vs real Gmail workspaces
 
 ## Validation Snapshot
 
