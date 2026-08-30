@@ -115,6 +115,7 @@ def list_accounts(
 def queue_sync(
     request: Request,
     account_id: int | None = None,
+    max_results: int | None = Query(default=None, ge=1, le=12000),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     queue: SyncJobQueue = Depends(get_sync_queue),
@@ -127,7 +128,7 @@ def queue_sync(
     if account is None:
         raise HTTPException(status_code=404, detail="Gmail account not connected")
 
-    job = create_sync_job(db, current_user, account)
+    job = create_sync_job(db, current_user, account, max_results=max_results)
     db.commit()
     db.refresh(job)
     celery_task_id = queue.enqueue(job.id)

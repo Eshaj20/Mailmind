@@ -26,7 +26,7 @@ from app.models.user import User  # noqa: E402
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--email", required=True, help="The MailMind account email to export emails for")
-    parser.add_argument("--output", default="eval/labeled_emails.csv", help="Where to write the CSV template")
+    parser.add_argument("--output", default="eval/private/labeled_emails_real.csv", help="Where to write the private CSV template")
     parser.add_argument("--limit", type=int, default=150, help="Max emails to export (aim for 100-150)")
     args = parser.parse_args()
 
@@ -82,6 +82,7 @@ def main() -> None:
                 )
 
         print(f"Wrote {len(emails)} rows to {output_path}.")
+        print("Keep this file private; it contains real email metadata/snippets and is ignored by Git.")
         print("Fill in the label_* columns by hand:")
         print("  label_category: primary | promotions | social | updates | spam")
         print("  label_priority: high | medium | low")

@@ -203,6 +203,7 @@ export type SyncJob = {
   status: string;
   attempt_count: number;
   max_attempts: number;
+  max_results: number;
   synced_count: number;
   created_count: number;
   updated_count: number;
@@ -311,8 +312,11 @@ export async function searchEmails(query: string) {
   return request<EmailSearchResponse>(`/gmail/search?q=${encodeURIComponent(query)}&limit=8`);
 }
 
-export async function queueGmailSync(accountId?: number) {
-  const suffix = accountId ? `?account_id=${accountId}` : "";
+export async function queueGmailSync(accountId?: number, maxResults?: number) {
+  const params = new URLSearchParams();
+  if (accountId) params.set("account_id", String(accountId));
+  if (maxResults) params.set("max_results", String(maxResults));
+  const suffix = params.toString() ? `?${params.toString()}` : "";
   return request<SyncJob>(`/gmail/sync${suffix}`, { method: "POST" });
 }
 

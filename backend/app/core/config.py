@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://localhost:8000/api/v1/gmail/oauth/callback"
     gmail_scopes: str = "openid email profile https://www.googleapis.com/auth/gmail.modify"
     gmail_initial_sync_max_results: int = 25
+    gmail_sync_query: str = "newer_than:30d"
     redis_url: str = "redis://redis:6379/0"
     celery_broker_url: str = "redis://redis:6379/0"
     celery_result_backend: str = "redis://redis:6379/1"

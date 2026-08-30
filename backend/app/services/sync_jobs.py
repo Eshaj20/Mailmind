@@ -26,13 +26,14 @@ SYNC_STATUS_SUCCEEDED = "succeeded"
 SYNC_STATUS_FAILED = "failed"
 
 # Create a new sync job in the database for a given user and Gmail account, initializing it with the queued status and setting the maximum number of attempts based on application settings. The function returns the newly created SyncJob instance.
-def create_sync_job(db: Session, user: User, account: GmailAccount) -> SyncJob:
+def create_sync_job(db: Session, user: User, account: GmailAccount, max_results: int | None = None) -> SyncJob:
     job = SyncJob(
         user_id=user.id,
         gmail_account_id=account.id,
         job_type="gmail_sync",
         status=SYNC_STATUS_QUEUED,
         max_attempts=settings.sync_job_max_attempts,
+        max_results=max_results or settings.gmail_initial_sync_max_results,
     )
     db.add(job)
     db.flush()
@@ -72,6 +73,7 @@ def process_sync_job(
             "user_id": job.user_id,
             "gmail_account_id": job.gmail_account_id,
             "attempt_count": job.attempt_count,
+            "max_results": job.max_results,
         },
     )
 
@@ -82,7 +84,7 @@ def process_sync_job(
             user=user,
             account=account,
             client=client or GmailClient(),
-            max_results=settings.gmail_initial_sync_max_results,
+            max_results=job.max_results,
         )
     except TransientGmailSyncError as exc:
         _mark_transient_failure(db, job, exc, started)
@@ -114,6 +116,7 @@ def _mark_succeeded(db: Session, job: SyncJob, stats: GmailSyncStats, started: f
             "user_id": job.user_id,
             "gmail_account_id": job.gmail_account_id,
             "message_count": stats.synced_count,
+            "max_results": job.max_results,
             "created_count": stats.created_count,
             "updated_count": stats.updated_count,
             "duration_ms": duration_ms,
@@ -140,6 +143,7 @@ def _mark_transient_failure(db: Session, job: SyncJob, exc: TransientGmailSyncEr
             "user_id": job.user_id,
             "gmail_account_id": job.gmail_account_id,
             "attempt_count": job.attempt_count,
+            "max_results": job.max_results,
             "duration_ms": duration_ms,
             "error_type": job.error_type,
         },
@@ -160,6 +164,7 @@ def _mark_failed(db: Session, job: SyncJob, error_type: str, error_message: str,
             "user_id": job.user_id,
             "gmail_account_id": job.gmail_account_id,
             "attempt_count": job.attempt_count,
+            "max_results": job.max_results,
             "duration_ms": duration_ms,
             "error_type": error_type,
         },

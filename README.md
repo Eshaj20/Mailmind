@@ -33,6 +33,7 @@ Week 8 polish and production packaging is in progress:
 - Sender intelligence API (`GET /api/v1/gmail/senders`) grouping inbox noise by sender with suggested review actions
 - Filtered/paginated email API (`GET /api/v1/gmail/emails`) with category, priority, read-state, reply-state, sender, limit, and offset filters
 - Sync health API (`GET /api/v1/gmail/sync/health`) summarizing queued/running/retrying/succeeded/failed jobs and Gmail error counts
+- Staged real-inbox sync limits (`POST /api/v1/gmail/sync?max_results=100`) for safe 25 -> 100 -> 500+ Gmail benchmarking
 
 ## Validation Snapshot
 
@@ -195,6 +196,7 @@ flowchart TD
 
 - [API reference](docs/api.md)
 - [System design guide](docs/system-design.md)
+- [Real Gmail evaluation workflow](docs/real-inbox-evaluation.md)
 - [Deployment guide](docs/deployment.md)
 - [Search benchmark notes](docs/search-benchmark.md)
 
@@ -212,6 +214,7 @@ MailMind/
     api.md
     architecture.md
     system-design.md
+    real-inbox-evaluation.md
     roadmap.md
     deployment.md
     search-benchmark.md

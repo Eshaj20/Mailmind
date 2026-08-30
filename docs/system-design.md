@@ -253,6 +253,7 @@ Health score formula:
 ## 13. What To Improve Next
 
 - Run classification evaluation on a larger labeled dataset instead of a small smoke-test set.
+- Use staged real-inbox sync limits before attempting a full 12000+ email import.
 - Benchmark hybrid search with more labeled search queries and compare keyword-only, vector-only, and hybrid RRF.
 - Add production metrics dashboards for sync latency, Gmail API failures, and AI cost trends.
 - Add more granular cleanup actions such as unsubscribe detection, batch archive by sender, and undo history.

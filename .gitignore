@@ -17,3 +17,8 @@ postgres_data/
 # Local interview prep notes
 docs/hexcoded_interview_prep.md
 docs/mailmind_interview_quick_guide.md
+# Private real Gmail exports and benchmark outputs
+backend/eval/private/
+backend/eval/search_benchmark.real.*
+backend/eval/labeled_emails_real.csv
+backend/eval/search_queries.real.csv

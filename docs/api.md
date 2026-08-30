@@ -90,7 +90,7 @@ Connected account fields:
 
 | Method | Endpoint | Auth | Purpose |
 | --- | --- | --- | --- |
-| `POST` | `/gmail/sync` | Yes | Queues an async Gmail re-sync job. |
+| `POST` | `/gmail/sync` | Yes | Queues an async Gmail re-sync job with optional staged sync limit. |
 | `GET` | `/gmail/sync/jobs` | Yes | Lists sync jobs for the current user. |
 | `GET` | `/gmail/sync/jobs/{job_id}` | Yes | Fetches one sync job by id. |
 | `GET` | `/gmail/sync/health` | Yes | Summarizes sync reliability and recent job status. |
@@ -100,6 +100,7 @@ Optional query parameter for `POST /gmail/sync`:
 | Query | Meaning |
 | --- | --- |
 | `account_id` | Sync one connected Gmail account; otherwise uses the user's first matching account. |
+| `max_results` | Optional per-job Gmail fetch limit from 1 to 12000 for staged real-inbox testing. |
 
 Sync job fields:
 
@@ -108,6 +109,7 @@ Sync job fields:
 | `status` | `queued`, `running`, `retrying`, `succeeded`, or `failed`. |
 | `attempt_count` | Number of attempts already made. |
 | `max_attempts` | Retry ceiling before permanent failure. |
+| `max_results` | Gmail fetch limit recorded for that job. |
 | `synced_count` | Gmail messages processed. |
 | `created_count` | New email rows inserted. |
 | `updated_count` | Existing email rows updated by idempotent upsert. |

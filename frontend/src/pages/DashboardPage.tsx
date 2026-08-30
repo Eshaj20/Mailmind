@@ -52,6 +52,7 @@ export function DashboardPage() {
   const queryClient = useQueryClient();
   const hasToken = Boolean(getToken());
   const [searchQuery, setSearchQuery] = useState("");
+  const [syncLimit, setSyncLimit] = useState(100);
   const [emailFilters, setEmailFilters] = useState({ category: "", priority: "", is_read: "", needs_reply: "", sender: "", offset: 0 });
   const [selectedCleanupIds, setSelectedCleanupIds] = useState<number[]>([]);
   const meQuery = useQuery({
@@ -141,7 +142,7 @@ export function DashboardPage() {
     },
   });
   const syncMutation = useMutation({
-    mutationFn: (accountId: number | undefined) => queueGmailSync(accountId),
+    mutationFn: ({ accountId, maxResults }: { accountId?: number; maxResults: number }) => queueGmailSync(accountId, maxResults),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sync-jobs"] });
       queryClient.invalidateQueries({ queryKey: ["emails"] });
@@ -292,15 +293,26 @@ export function DashboardPage() {
               {connectedAccount ? "Reconnect Gmail" : connectMutation.isPending ? "Opening Google..." : "Connect Gmail"}
             </button>
             {connectedAccount && (
-              <button
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-3 font-semibold text-ink hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                type="button"
-                disabled={syncMutation.isPending}
-                onClick={() => syncMutation.mutate(connectedAccount.id)}
-              >
-                <RefreshCw size={18} aria-hidden />
-                {syncMutation.isPending ? "Queueing sync..." : "Queue sync"}
-              </button>
+              <div className="grid gap-2">
+                <select
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-moss"
+                  value={syncLimit}
+                  onChange={(event) => setSyncLimit(Number(event.target.value))}
+                >
+                  <option value={25}>25 emails</option>
+                  <option value={100}>100 emails</option>
+                  <option value={500}>500 emails</option>
+                </select>
+                <button
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-3 font-semibold text-ink hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  type="button"
+                  disabled={syncMutation.isPending}
+                  onClick={() => syncMutation.mutate({ accountId: connectedAccount.id, maxResults: syncLimit })}
+                >
+                  <RefreshCw size={18} aria-hidden />
+                  {syncMutation.isPending ? "Queueing sync..." : `Queue ${syncLimit}-email sync`}
+                </button>
+              </div>
             )}
             {connectedAccount && (
               <button
@@ -322,7 +334,7 @@ export function DashboardPage() {
             <div className="mt-5 rounded-lg border border-slate-200 p-4 text-sm">
               <p className="font-semibold text-ink">Latest sync: {latestJob.status}</p>
               <p className="mt-1 text-slate-500">
-                {latestJob.created_count} created, {latestJob.updated_count} updated, attempt {latestJob.attempt_count}
+                {latestJob.created_count} created, {latestJob.updated_count} updated, limit {latestJob.max_results}, attempt {latestJob.attempt_count}
                 /{latestJob.max_attempts}
               </p>
             </div>

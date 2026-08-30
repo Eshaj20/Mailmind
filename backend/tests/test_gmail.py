@@ -502,3 +502,61 @@ def test_sync_health_summarizes_job_statuses(client, db_session):
     assert payload["queued_jobs"] == 1
     assert payload["retrying_jobs"] == 1
     assert payload["error_counts"]["transient_gmail_error"] == 1
+
+def test_gmail_sync_endpoint_records_per_job_max_results(client, db_session):
+    fake_queue = FakeSyncQueue()
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    client.app.dependency_overrides[get_sync_queue] = lambda: fake_queue
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    response = client.post("/api/v1/gmail/sync?max_results=100", headers=headers)
+
+    assert response.status_code == 202
+    assert response.json()["max_results"] == 100
+    job = db_session.get(SyncJob, response.json()["id"])
+    assert job.max_results == 100
+
+
+def test_gmail_client_fetch_latest_messages_follows_page_tokens(monkeypatch):
+    from app.services.gmail import GmailClient
+
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    def fake_get(url, *, headers, params, timeout):
+        calls.append({"url": url, "params": dict(params)})
+        if url.endswith("/messages") and "pageToken" not in params:
+            return FakeResponse({"messages": [{"id": "m1"}], "nextPageToken": "page-2"})
+        if url.endswith("/messages") and params.get("pageToken") == "page-2":
+            return FakeResponse({"messages": [{"id": "m2"}]})
+        message_id = url.rsplit("/", 1)[-1]
+        return FakeResponse(
+            {
+                "id": message_id,
+                "threadId": f"thread-{message_id}",
+                "historyId": f"history-{message_id}",
+                "labelIds": ["INBOX"],
+                "snippet": f"snippet {message_id}",
+                "payload": {"headers": [{"name": "Subject", "value": f"Subject {message_id}"}]},
+                "internalDate": "1785607200000",
+            }
+        )
+
+    monkeypatch.setattr("app.services.gmail.httpx.get", fake_get)
+
+    messages = GmailClient().fetch_latest_messages("access-token", max_results=2)
+
+    assert [message.gmail_message_id for message in messages] == ["m1", "m2"]
+    list_calls = [call for call in calls if call["url"].endswith("/messages")]
+    assert list_calls[0]["params"]["maxResults"] == 2
+    assert list_calls[1]["params"]["pageToken"] == "page-2"

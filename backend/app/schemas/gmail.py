@@ -236,6 +236,7 @@ class SyncJobRead(BaseModel):
     status: str
     attempt_count: int
     max_attempts: int
+    max_results: int
     synced_count: int
     created_count: int
     updated_count: int

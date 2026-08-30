@@ -146,14 +146,39 @@ class GmailClient:
 
     def fetch_latest_messages(self, access_token: str, max_results: int) -> list[GmailMessage]:
         try:
-            list_response = httpx.get(
-                f"{GMAIL_API_BASE}/messages",
-                headers={"Authorization": f"Bearer {access_token}"},
-                params={"maxResults": max_results, "q": "newer_than:30d"},
-                timeout=15,
-            )
-            list_response.raise_for_status()
-            message_refs = list_response.json().get("messages", [])
+            message_refs: list[dict[str, str]] = []
+            seen_ids: set[str] = set()
+            page_token: str | None = None
+            remaining = max_results
+
+            while remaining > 0:
+                params: dict[str, Any] = {"maxResults": min(500, remaining)}
+                if self.config.gmail_sync_query.strip():
+                    params["q"] = self.config.gmail_sync_query.strip()
+                if page_token:
+                    params["pageToken"] = page_token
+
+                list_response = httpx.get(
+                    f"{GMAIL_API_BASE}/messages",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    params=params,
+                    timeout=15,
+                )
+                list_response.raise_for_status()
+                payload = list_response.json()
+                for item in payload.get("messages", []):
+                    message_id = item.get("id")
+                    if message_id and message_id not in seen_ids:
+                        message_refs.append(item)
+                        seen_ids.add(message_id)
+                        remaining -= 1
+                        if remaining <= 0:
+                            break
+
+                page_token = payload.get("nextPageToken")
+                if not page_token:
+                    break
+
             return [self.fetch_message(access_token, item["id"]) for item in message_refs]
         except GmailSyncError:
             raise
@@ -162,27 +187,45 @@ class GmailClient:
 
     def fetch_history_messages(self, access_token: str, start_history_id: str, max_results: int) -> GmailMessageBatch:
         try:
-            response = httpx.get(
-                f"{GMAIL_API_BASE}/history",
-                headers={"Authorization": f"Bearer {access_token}"},
-                params={
+            message_ids: list[str] = []
+            page_token: str | None = None
+            latest_history_id: str | None = None
+
+            while len(message_ids) < max_results:
+                params = {
                     "startHistoryId": start_history_id,
                     "historyTypes": "messageAdded",
-                    "maxResults": max_results,
-                },
-                timeout=15,
-            )
-            response.raise_for_status()
-            payload = response.json()
-            message_ids: list[str] = []
-            for history in payload.get("history", []):
-                for added in history.get("messagesAdded", []):
-                    message_id = added.get("message", {}).get("id")
-                    if message_id and message_id not in message_ids:
-                        message_ids.append(message_id)
+                    "maxResults": min(500, max_results - len(message_ids)),
+                }
+                if page_token:
+                    params["pageToken"] = page_token
+
+                response = httpx.get(
+                    f"{GMAIL_API_BASE}/history",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    params=params,
+                    timeout=15,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                latest_history_id = str(payload.get("historyId")) if payload.get("historyId") else latest_history_id
+                for history in payload.get("history", []):
+                    for added in history.get("messagesAdded", []):
+                        message_id = added.get("message", {}).get("id")
+                        if message_id and message_id not in message_ids:
+                            message_ids.append(message_id)
+                            if len(message_ids) >= max_results:
+                                break
+                    if len(message_ids) >= max_results:
+                        break
+
+                page_token = payload.get("nextPageToken")
+                if not page_token:
+                    break
+
             return GmailMessageBatch(
                 messages=[self.fetch_message(access_token, message_id) for message_id in message_ids],
-                history_id=str(payload.get("historyId")) if payload.get("historyId") else None,
+                history_id=latest_history_id,
             )
         except GmailSyncError:
             raise
