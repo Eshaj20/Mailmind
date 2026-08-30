@@ -89,6 +89,16 @@ npm install
 npm run build
 ```
 
+
+## Demo Inbox Mode
+
+You can run MailMind end-to-end without Google OAuth or real Gmail data:
+
+```bash
+docker compose exec backend python -m scripts.seed_demo_inbox --count 150 --reset
+```
+
+Then login at `http://localhost:5173` with `demo@mailmind.local` / `DemoPass123!`.
 ## Roadmap
 
 | Week | Milestone | Shippable Outcome |
@@ -197,6 +207,7 @@ flowchart TD
 - [API reference](docs/api.md)
 - [System design guide](docs/system-design.md)
 - [Real Gmail evaluation workflow](docs/real-inbox-evaluation.md)
+- [Demo inbox mode](docs/demo-mode.md)
 - [Deployment guide](docs/deployment.md)
 - [Search benchmark notes](docs/search-benchmark.md)
 
@@ -215,6 +226,7 @@ MailMind/
     architecture.md
     system-design.md
     real-inbox-evaluation.md
+    demo-mode.md
     roadmap.md
     deployment.md
     search-benchmark.md
