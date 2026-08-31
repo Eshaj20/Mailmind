@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { AuthPage } from "./pages/AuthPage";
+import { CleanupReviewPage } from "./pages/CleanupReviewPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import "./styles.css";
 
@@ -15,6 +16,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/cleanup" element={<CleanupReviewPage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

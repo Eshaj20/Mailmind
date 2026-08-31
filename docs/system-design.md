@@ -18,6 +18,7 @@ Functional requirements:
 - Emails can be classified by category, priority, and reply need.
 - Users can search emails using hybrid keyword + semantic search.
 - Users can preview cleanup candidates before applying Gmail changes.
+- Users can filter/search cleanup candidates and apply bulk cleanup from a dedicated review page.
 - Users can give feedback when AI labels are wrong.
 - Users can undo archive or mark-read cleanup actions after applying them.
 
@@ -209,6 +210,7 @@ Design decision:
 
 - Cleanup is review-first because email deletion/archive decisions are sensitive.
 - The system suggests actions, but the user confirms before Gmail is modified.
+- The dedicated cleanup review page keeps bulk actions explicit: users filter, search, select visible emails, then apply one action.
 - Local state is mirrored after Gmail changes so the dashboard stays consistent.
 - Every cleanup action stores previous labels and read state, so the user can undo a risky archive/mark-read decision.
 - Health score is formula-based, so it is explainable rather than vague AI magic.

@@ -72,7 +72,7 @@ Recommended demo flow:
    - `security alert`
    - `unsubscribe newsletter`
 6. Show inbox health score.
-7. Show cleanup preview.
+7. Open `/cleanup` from the dashboard and show the dedicated cleanup review workflow.
 8. Apply archive or mark-read on synthetic emails only.
 9. Show sender intelligence.
 

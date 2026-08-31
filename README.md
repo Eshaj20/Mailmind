@@ -36,6 +36,7 @@ Week 8 polish and production packaging is in progress:
 - Staged real-inbox sync limits (`POST /api/v1/gmail/sync?max_results=100`) for safe 25 -> 100 -> 500+ Gmail benchmarking
 - Product mode banner and sync progress display for demo vs real Gmail workspaces
 - Reversible cleanup undo for archive/mark-read actions using an audit log of prior Gmail labels and read state
+- Dedicated cleanup review page (`/cleanup`) with filters, search, visible selection, bulk archive/mark-read, undo, and not-cleanup feedback
 
 ## Validation Snapshot
 

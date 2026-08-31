@@ -358,8 +358,8 @@ export async function getInboxInsights() {
   return request<InboxHealth>("/gmail/insights");
 }
 
-export async function getCleanupPreview() {
-  return request<CleanupPreview>("/gmail/cleanup/preview?limit=10");
+export async function getCleanupPreview(limit = 10) {
+  return request<CleanupPreview>(`/gmail/cleanup/preview?limit=${limit}`);
 }
 
 export async function applyCleanupAction(emailIds: number[], action: CleanupAction) {

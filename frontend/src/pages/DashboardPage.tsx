@@ -109,7 +109,7 @@ export function DashboardPage() {
   });
   const cleanupPreviewQuery = useQuery({
     queryKey: ["cleanup-preview"],
-    queryFn: getCleanupPreview,
+    queryFn: () => getCleanupPreview(),
     enabled: hasToken && Boolean(accountsQuery.data?.length),
     retry: false,
   });
@@ -480,7 +480,12 @@ export function DashboardPage() {
             <div className="rounded-lg border border-slate-200 bg-white p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-semibold text-ink">Archive preview</h2>
+                  <div className="flex items-center justify-between gap-3">
+                <h2 className="text-xl font-semibold text-ink">Archive preview</h2>
+                <Link className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-moss" to="/cleanup">
+                  Review cleanup
+                </Link>
+              </div>
                   <p className="mt-1 text-sm text-slate-500">
                     {cleanupPreviewQuery.data.total_candidates} safe candidates before any Gmail action.
                   </p>
