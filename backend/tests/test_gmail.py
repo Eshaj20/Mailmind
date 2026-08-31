@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from app.api.deps import get_gmail_client, get_sync_queue
+from app.models.cleanup_action import CleanupActionLog
 from app.models.feedback import EmailFeedback
 from app.models.gmail import Email, GmailAccount
 from app.models.sync_job import SyncJob
@@ -396,6 +397,8 @@ def test_cleanup_action_archives_selected_email_and_updates_local_labels(client,
     assert payload["applied_count"] == 1
     assert payload["skipped_count"] == 0
     assert payload["emails"][0]["gmail_message_id"] == "msg-2"
+    assert len(payload["action_ids"]) == 1
+    assert db_session.scalar(select(CleanupActionLog).where(CleanupActionLog.id == payload["action_ids"][0])) is not None
     db_session.refresh(bill_email)
     assert "INBOX" not in bill_email.labels
     assert FakeGmailClient.modified_messages[-1]["remove_labels"] == ["INBOX"]
@@ -564,3 +567,73 @@ def test_gmail_client_fetch_latest_messages_follows_page_tokens(monkeypatch):
     list_calls = [call for call in calls if call["url"].endswith("/messages")]
     assert list_calls[0]["params"]["maxResults"] == 2
     assert list_calls[1]["params"]["pageToken"] == "page-2"
+
+def test_cleanup_action_undo_restores_archived_email(client, db_session):
+    FakeGmailClient.modified_messages = []
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    bill_email = db_session.scalar(select(Email).where(Email.gmail_message_id == "msg-2"))
+    response = client.post(
+        "/api/v1/gmail/cleanup/actions",
+        headers=headers,
+        json={"email_ids": [bill_email.id], "action": "archive"},
+    )
+    action_id = response.json()["action_ids"][0]
+
+    undo = client.post(f"/api/v1/gmail/cleanup/actions/{action_id}/undo", headers=headers)
+
+    assert undo.status_code == 200
+    payload = undo.json()
+    assert payload["action"] == "archive"
+    assert payload["email"]["gmail_message_id"] == "msg-2"
+    assert payload["restored_labels"] == ["INBOX"]
+    db_session.refresh(bill_email)
+    assert bill_email.labels == ["INBOX"]
+    assert FakeGmailClient.modified_messages[-1]["add_labels"] == ["INBOX"]
+
+
+def test_cleanup_action_undo_restores_mark_read_state(client, db_session):
+    FakeGmailClient.modified_messages = []
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    recruiter_email = db_session.scalar(select(Email).where(Email.gmail_message_id == "msg-1"))
+    assert recruiter_email.is_read is False
+    response = client.post(
+        "/api/v1/gmail/cleanup/actions",
+        headers=headers,
+        json={"email_ids": [recruiter_email.id], "action": "mark_read"},
+    )
+    action_id = response.json()["action_ids"][0]
+
+    undo = client.post(f"/api/v1/gmail/cleanup/actions/{action_id}/undo", headers=headers)
+
+    assert undo.status_code == 200
+    payload = undo.json()
+    assert payload["action"] == "mark_read"
+    assert payload["restored_is_read"] is False
+    assert "UNREAD" in payload["restored_labels"]
+    db_session.refresh(recruiter_email)
+    assert recruiter_email.is_read is False
+    assert "UNREAD" in recruiter_email.labels
+    assert FakeGmailClient.modified_messages[-1]["add_labels"] == ["UNREAD"]
+
+
+def test_cleanup_action_undo_is_single_use(client):
+    FakeGmailClient.modified_messages = []
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    response = client.post(
+        "/api/v1/gmail/cleanup/actions",
+        headers=headers,
+        json={"email_ids": [2], "action": "archive"},
+    )
+    action_id = response.json()["action_ids"][0]
+
+    assert client.post(f"/api/v1/gmail/cleanup/actions/{action_id}/undo", headers=headers).status_code == 200
+    assert client.post(f"/api/v1/gmail/cleanup/actions/{action_id}/undo", headers=headers).status_code == 404

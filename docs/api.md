@@ -161,6 +161,7 @@ Search result fields include:
 | `GET` | `/gmail/insights` | Yes | Returns inbox health score, formula, and prioritized suggestions. |
 | `GET` | `/gmail/cleanup/preview` | Yes | Shows safe cleanup candidates before any Gmail action is applied. |
 | `POST` | `/gmail/cleanup/actions` | Yes | Applies user-confirmed cleanup actions through Gmail modify API. |
+| `POST` | `/gmail/cleanup/actions/{action_id}/undo` | Yes | Restores labels/read state for one previously applied cleanup action. |
 | `GET` | `/gmail/senders` | Yes | Groups noisy or important sender patterns. |
 | `POST` | `/gmail/feedback` | Yes | Stores human corrections for AI labels and updates latest email snapshot. |
 
@@ -172,6 +173,8 @@ Cleanup action body:
   "action": "archive"
 }
 ```
+
+Returns `action_ids` so the UI can offer an immediate undo for the last archive or mark-read operation.
 
 Supported cleanup actions:
 
@@ -212,4 +215,5 @@ Classification output tracks category, priority, reply need, confidence, model v
 - Re-sync is idempotent: Gmail message IDs and database constraints/upsert logic prevent duplicate email rows.
 - Retryable Gmail failures are tracked through job states and error fields.
 - Cleanup is review-first: the system previews candidates and only modifies Gmail after explicit user action.
+- Cleanup undo uses an audit log of previous labels/read state, then restores Gmail labels and local PostgreSQL state.
 - AI usage is logged per user so token volume and estimated cost can be monitored.

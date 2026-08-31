@@ -126,7 +126,16 @@ export type CleanupActionResult = {
   requested_count: number;
   applied_count: number;
   skipped_count: number;
+  action_ids: number[];
   emails: Email[];
+};
+
+export type CleanupUndoResult = {
+  action_id: number;
+  action: CleanupAction;
+  email: Email;
+  restored_labels: string[];
+  restored_is_read: boolean;
 };
 
 export type EmailFeedback = {
@@ -358,6 +367,10 @@ export async function applyCleanupAction(emailIds: number[], action: CleanupActi
     method: "POST",
     body: JSON.stringify({ email_ids: emailIds, action }),
   });
+}
+
+export async function undoCleanupAction(actionId: number) {
+  return request<CleanupUndoResult>(`/gmail/cleanup/actions/${actionId}/undo`, { method: "POST" });
 }
 
 export async function submitEmailFeedback(payload: {

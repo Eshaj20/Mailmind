@@ -35,6 +35,7 @@ Week 8 polish and production packaging is in progress:
 - Sync health API (`GET /api/v1/gmail/sync/health`) summarizing queued/running/retrying/succeeded/failed jobs and Gmail error counts
 - Staged real-inbox sync limits (`POST /api/v1/gmail/sync?max_results=100`) for safe 25 -> 100 -> 500+ Gmail benchmarking
 - Product mode banner and sync progress display for demo vs real Gmail workspaces
+- Reversible cleanup undo for archive/mark-read actions using an audit log of prior Gmail labels and read state
 
 ## Validation Snapshot
 

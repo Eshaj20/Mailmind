@@ -146,7 +146,16 @@ class CleanupActionResultRead(BaseModel):
     requested_count: int
     applied_count: int
     skipped_count: int
+    action_ids: list[int]
     emails: list[EmailRead]
+
+
+class CleanupUndoResultRead(BaseModel):
+    action_id: int
+    action: str
+    email: EmailRead
+    restored_labels: list[str]
+    restored_is_read: bool
 
 
 class EmailFeedbackCreate(BaseModel):

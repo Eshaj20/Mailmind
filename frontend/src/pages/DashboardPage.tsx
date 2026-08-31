@@ -23,6 +23,7 @@ import {
   queueGmailSync,
   searchEmails,
   submitEmailFeedback,
+  undoCleanupAction,
 } from "../api/client";
 
 const milestones = [
@@ -55,6 +56,7 @@ export function DashboardPage() {
   const [syncLimit, setSyncLimit] = useState(100);
   const [emailFilters, setEmailFilters] = useState({ category: "", priority: "", is_read: "", needs_reply: "", sender: "", offset: 0 });
   const [selectedCleanupIds, setSelectedCleanupIds] = useState<number[]>([]);
+  const [lastCleanupActionIds, setLastCleanupActionIds] = useState<number[]>([]);
   const meQuery = useQuery({
     queryKey: ["me"],
     queryFn: getMe,
@@ -154,7 +156,8 @@ export function DashboardPage() {
   const cleanupActionMutation = useMutation({
     mutationFn: ({ emailId, action }: { emailId: number; action: "archive" | "mark_read" }) =>
       applyCleanupAction([emailId], action),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      setLastCleanupActionIds(data.action_ids);
       queryClient.invalidateQueries({ queryKey: ["emails"] });
       queryClient.invalidateQueries({ queryKey: ["inbox-insights"] });
       queryClient.invalidateQueries({ queryKey: ["cleanup-preview"] });
@@ -163,8 +166,19 @@ export function DashboardPage() {
   });
   const bulkCleanupActionMutation = useMutation({
     mutationFn: (action: "archive" | "mark_read") => applyCleanupAction(selectedCleanupIds, action),
-    onSuccess: () => {
+    onSuccess: (data) => {
       setSelectedCleanupIds([]);
+      setLastCleanupActionIds(data.action_ids);
+      queryClient.invalidateQueries({ queryKey: ["emails"] });
+      queryClient.invalidateQueries({ queryKey: ["inbox-insights"] });
+      queryClient.invalidateQueries({ queryKey: ["cleanup-preview"] });
+      queryClient.invalidateQueries({ queryKey: ["sender-insights"] });
+    },
+  });
+  const undoCleanupMutation = useMutation({
+    mutationFn: async (actionIds: number[]) => Promise.all(actionIds.map((actionId) => undoCleanupAction(actionId))),
+    onSuccess: () => {
+      setLastCleanupActionIds([]);
       queryClient.invalidateQueries({ queryKey: ["emails"] });
       queryClient.invalidateQueries({ queryKey: ["inbox-insights"] });
       queryClient.invalidateQueries({ queryKey: ["cleanup-preview"] });
@@ -501,7 +515,26 @@ export function DashboardPage() {
                     Mark read
                   </button>
                 </div>
-              )}              <div className="mt-5 space-y-3">
+              )}
+              {lastCleanupActionIds.length > 0 && (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm font-medium text-ink">
+                      Last cleanup changed {lastCleanupActionIds.length} email
+                      {lastCleanupActionIds.length === 1 ? "" : "s"}.
+                    </p>
+                    <button
+                      className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-moss disabled:opacity-60"
+                      type="button"
+                      disabled={undoCleanupMutation.isPending}
+                      onClick={() => undoCleanupMutation.mutate(lastCleanupActionIds)}
+                    >
+                      {undoCleanupMutation.isPending ? "Undoing..." : "Undo last cleanup"}
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="mt-5 space-y-3">
                 {cleanupPreviewItems.slice(0, 6).map((item) => (
                   <div key={item.email.id} className="rounded-lg border border-slate-100 p-3">
                     <div className="flex items-start justify-between gap-3">

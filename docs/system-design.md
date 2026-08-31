@@ -19,6 +19,7 @@ Functional requirements:
 - Users can search emails using hybrid keyword + semantic search.
 - Users can preview cleanup candidates before applying Gmail changes.
 - Users can give feedback when AI labels are wrong.
+- Users can undo archive or mark-read cleanup actions after applying them.
 
 Non-functional requirements:
 
@@ -200,6 +201,8 @@ flowchart TD
     Dashboard --> Confirm[User Confirms Action]
     Confirm --> GmailModify[Gmail Modify API]
     GmailModify --> LocalMirror[Mirror Labels Locally]
+    Confirm --> UndoLog[Store Previous Labels + Read State]
+    UndoLog --> Restore[Undo Gmail + Local State]
 ```
 
 Design decision:
@@ -207,6 +210,7 @@ Design decision:
 - Cleanup is review-first because email deletion/archive decisions are sensitive.
 - The system suggests actions, but the user confirms before Gmail is modified.
 - Local state is mirrored after Gmail changes so the dashboard stays consistent.
+- Every cleanup action stores previous labels and read state, so the user can undo a risky archive/mark-read decision.
 - Health score is formula-based, so it is explainable rather than vague AI magic.
 
 Health score formula:
@@ -227,6 +231,7 @@ Health score formula:
 | `email_classifications` | Append-only AI classification audit log. | Stores confidence, model version, and label output history. |
 | `email_feedback` | Human corrections to AI labels. | Supports future evaluation and retraining. |
 | `ai_usage_logs` | AI token and cost events. | Lets the app report usage/cost per user and feature. |
+| `cleanup_action_logs` | Cleanup action audit/undo records. | Stores prior labels/read state so archive and mark-read actions can be reversed. |
 
 ## 11. Important Design Decisions
 
@@ -242,6 +247,7 @@ Health score formula:
 | Two-stage classifier | Reduces LLM usage and gives deterministic behavior for obvious categories. |
 | pgvector + full-text + RRF | Combines exact keyword matching with semantic retrieval. |
 | Review-first cleanup | Avoids unsafe automatic email deletion/archive behavior. |
+| Cleanup undo log | Makes Gmail cleanup safer by allowing users to restore labels/read state after a confirmed action. |
 | Feedback log | Turns user corrections into future evaluation/retraining data. |
 | Rate limiting | Protects expensive Gmail and AI routes from abuse or accidental repeated calls. |
 | AI usage ledger | Makes token/cost behavior visible per user and feature. |
@@ -256,5 +262,5 @@ Health score formula:
 - Use staged real-inbox sync limits before attempting a full 12000+ email import.
 - Benchmark hybrid search with more labeled search queries and compare keyword-only, vector-only, and hybrid RRF.
 - Add production metrics dashboards for sync latency, Gmail API failures, and AI cost trends.
-- Add more granular cleanup actions such as unsubscribe detection, batch archive by sender, and undo history.
+- Add more granular cleanup actions such as unsubscribe detection and batch archive by sender.
 - Deploy with production secrets, HTTPS, managed PostgreSQL, and worker monitoring.

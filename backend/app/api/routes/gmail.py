@@ -16,6 +16,7 @@ from app.schemas.gmail import (
     ClassificationSummaryRead,
     CleanupActionRequest,
     CleanupActionResultRead,
+    CleanupUndoResultRead,
     CleanupPreviewItemRead,
     CleanupPreviewRead,
     CleanupSuggestionRead,
@@ -38,7 +39,7 @@ from app.schemas.gmail import (
     ThreadRead,
 )
 from app.services.classification import LLMClient, classify_unclassified_emails, summarize_thread
-from app.services.cleanup_actions import apply_cleanup_action
+from app.services.cleanup_actions import apply_cleanup_action, undo_cleanup_action
 from app.services.feedback import record_email_feedback
 from app.services.gmail import (
     GmailClient,
@@ -344,10 +345,37 @@ def apply_cleanup_action_endpoint(
         requested_count=result.requested_count,
         applied_count=result.applied_count,
         skipped_count=result.skipped_count,
+        action_ids=result.action_ids,
         emails=result.emails,
     )
 
 
+
+@router.post("/cleanup/actions/{action_id}/undo", response_model=CleanupUndoResultRead)
+def undo_cleanup_action_endpoint(
+    action_id: int,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    client: GmailClient = Depends(get_gmail_client),
+) -> CleanupUndoResultRead:
+    _enforce_expensive_action_limit(request)
+    try:
+        result = undo_cleanup_action(db=db, user=current_user, client=client, action_id=action_id)
+    except GmailSyncError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Cleanup action not found or already undone")
+
+    db.commit()
+    db.refresh(result.email)
+    return CleanupUndoResultRead(
+        action_id=result.action_id,
+        action=result.action,
+        email=result.email,
+        restored_labels=result.restored_labels,
+        restored_is_read=result.restored_is_read,
+    )
 @router.get("/senders", response_model=list[SenderInsightRead])
 def list_sender_insights(
     limit: int = Query(default=10, ge=1, le=50),

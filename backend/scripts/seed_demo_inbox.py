@@ -23,6 +23,7 @@ from app.core.crypto import encrypt_value
 from app.core.security import hash_password
 from app.db.session import SessionLocal
 from app.models.classification import EmailClassification
+from app.models.cleanup_action import CleanupActionLog
 from app.models.feedback import EmailFeedback
 from app.models.gmail import Email, EmailThread, GmailAccount
 from app.models.sync_job import SyncJob
@@ -171,6 +172,7 @@ def _get_or_create_account(db: Session, user: User) -> GmailAccount:
 
 
 def _delete_demo_data(db: Session, user: User) -> None:
+    db.execute(delete(CleanupActionLog).where(CleanupActionLog.user_id == user.id))
     db.execute(delete(EmailFeedback).where(EmailFeedback.email_id.in_(select(Email.id).where(Email.user_id == user.id))))
     db.execute(delete(EmailClassification).where(EmailClassification.user_id == user.id))
     db.execute(delete(AIUsageLog).where(AIUsageLog.user_id == user.id))
