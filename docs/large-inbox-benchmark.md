@@ -21,9 +21,9 @@ python -m scripts.seed_large_inbox --count 10000 --reset
 This creates:
 
 ```text
-login: large@mailmind.local
+login: large@mailmind.dev
 password: LargePass123!
-gmail account: large.inbox@mailmind.local
+gmail account: large.inbox@mailmind.dev
 ```
 
 Use a smaller count while developing:

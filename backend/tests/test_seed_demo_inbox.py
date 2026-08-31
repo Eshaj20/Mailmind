@@ -22,7 +22,7 @@ def test_seed_demo_inbox_creates_classified_searchable_demo_data(db_session):
     assert result["password"] == DEMO_PASSWORD
     assert len(emails) == 20
     assert len(classifications) == 20
-    assert account.google_email == "demo.inbox@mailmind.local"
+    assert account.google_email == "demo.inbox@mailmind.dev"
     assert sync_job.status == "succeeded"
     assert sync_job.max_results == 20
     assert all(email.search_text for email in emails)

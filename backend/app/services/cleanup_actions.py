@@ -184,4 +184,4 @@ def _mirror_action_locally(email: Email, *, action: CleanupAction, remove_labels
 def _is_demo_account(account: GmailAccount) -> bool:
     """Demo inboxes use synthetic data, so cleanup actions stay local-only."""
     scopes = set(account.scopes or [])
-    return "demo" in scopes or account.google_email.endswith("@mailmind.local")
+    return "demo" in scopes or account.google_email.endswith("@mailmind.dev")

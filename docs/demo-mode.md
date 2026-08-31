@@ -4,7 +4,7 @@ Demo inbox mode lets MailMind run end-to-end without real Gmail OAuth, Google Cl
 
 It creates:
 
-- Demo user: `demo@mailmind.local`
+- Demo user: `demo@mailmind.dev`
 - Demo password: `DemoPass123!`
 - Fake connected Gmail account
 - Realistic synthetic inbox with recruiter, bills, travel, shopping, social, newsletter, security, and spam-like emails
@@ -45,7 +45,7 @@ http://localhost:5173
 Login with:
 
 ```text
-Email: demo@mailmind.local
+Email: demo@mailmind.dev
 Password: DemoPass123!
 ```
 

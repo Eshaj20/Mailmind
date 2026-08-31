@@ -115,7 +115,7 @@ python -m scripts.seed_demo_inbox --count 150 --reset
 Demo login:
 
 ```text
-email: demo@mailmind.local
+email: demo@mailmind.dev
 password: DemoPass123!
 ```
 
@@ -167,6 +167,20 @@ curl "https://your-api-domain.example/api/v1/gmail/search?q=electricity%20bill" 
   -H "Authorization: Bearer <jwt>"
 ```
 
+## Automated Smoke Test
+
+After seeding the demo inbox, run the smoke script against local or deployed API:
+
+```bash
+python -m scripts.smoke_deployment --base-url https://your-api-domain.example/api/v1
+```
+
+For a reversible cleanup action check on demo data:
+
+```bash
+python -m scripts.smoke_deployment --base-url https://your-api-domain.example/api/v1 --cleanup-undo
+```
+
 ## Deployment Checklist
 
 - [ ] Backend env vars configured from `.env.production.example`.
@@ -178,6 +192,7 @@ curl "https://your-api-domain.example/api/v1/gmail/search?q=electricity%20bill" 
 - [ ] Demo inbox seeded on deployed DB.
 - [ ] Auth page demo login works.
 - [ ] Dashboard loads inbox health, search, cleanup preview, and sender intelligence.
+- [ ] `python -m scripts.smoke_deployment --base-url <api>/api/v1` passes.
 - [ ] Cleanup action and undo work in demo mode.
 - [ ] Google OAuth redirect URI updated if real Gmail is enabled.
 - [ ] README has deployed frontend URL, backend URL, screenshots, and benchmark table.

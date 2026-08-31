@@ -236,7 +236,7 @@ export function DashboardPage() {
   }
 
   const connectedAccount = accountsQuery.data?.[0];
-  const isDemoWorkspace = connectedAccount?.google_email.endsWith("@mailmind.local") ?? false;
+  const isDemoWorkspace = connectedAccount?.google_email.endsWith("@mailmind.dev") ?? false;
   const workspaceMode = isDemoWorkspace ? "Demo Inbox Mode" : connectedAccount ? "Real Gmail Mode" : "Setup Mode";
   const workspaceModeCopy = isDemoWorkspace
     ? "Synthetic emails for safe recruiter/user walkthroughs. No personal Gmail data is exposed."

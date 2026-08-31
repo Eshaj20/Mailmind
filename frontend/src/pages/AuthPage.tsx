@@ -32,7 +32,7 @@ export function AuthPage() {
 
   function useDemoWorkspace() {
     setMode("login");
-    setEmail("demo@mailmind.local");
+    setEmail("demo@mailmind.dev");
     setPassword("DemoPass123!");
     setFullName("");
   }

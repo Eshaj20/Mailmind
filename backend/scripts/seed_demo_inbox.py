@@ -32,9 +32,9 @@ from app.models.user import User
 from app.services.classification import LLMClient, classify_unclassified_emails
 from app.services.search import ensure_email_search_index
 
-DEMO_EMAIL = "demo@mailmind.local"
+DEMO_EMAIL = "demo@mailmind.dev"
 DEMO_PASSWORD = "DemoPass123!"
-DEMO_GMAIL = "demo.inbox@mailmind.local"
+DEMO_GMAIL = "demo.inbox@mailmind.dev"
 DEMO_ACCOUNT_TOKEN = "demo-refresh-token-not-real"
 
 

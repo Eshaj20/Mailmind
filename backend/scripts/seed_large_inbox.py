@@ -33,9 +33,9 @@ from app.models.user import User
 from app.services.classification import LLMClient, classify_email
 from app.services.search import ensure_email_search_index
 
-LARGE_EMAIL = "large@mailmind.local"
+LARGE_EMAIL = "large@mailmind.dev"
 LARGE_PASSWORD = "LargePass123!"
-LARGE_GMAIL = "large.inbox@mailmind.local"
+LARGE_GMAIL = "large.inbox@mailmind.dev"
 LARGE_ACCOUNT_TOKEN = "large-inbox-refresh-token-not-real"
 
 

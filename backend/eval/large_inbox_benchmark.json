@@ -1,9 +1,9 @@
 {
-  "user_email": "large@mailmind.local",
+  "user_email": "large@mailmind.dev",
   "seed_result": {
-    "email": "large@mailmind.local",
+    "email": "large@mailmind.dev",
     "password": "LargePass123!",
-    "gmail_account": "large.inbox@mailmind.local",
+    "gmail_account": "large.inbox@mailmind.dev",
     "target_count": 10000,
     "total_count": 10000,
     "created_count": 10000,
