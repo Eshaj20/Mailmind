@@ -16,10 +16,11 @@ import {
   type CleanupPreviewItem,
 } from "../api/client";
 
-type ReviewFilter = "all" | "promotions" | "updates" | "low_priority" | "unread";
+type ReviewFilter = "all" | "spam_risk" | "promotions" | "updates" | "low_priority" | "unread";
 
 const filterLabels: Record<ReviewFilter, string> = {
   all: "All candidates",
+  spam_risk: "Spam risk",
   promotions: "Promotions",
   updates: "Updates",
   low_priority: "Low priority",
@@ -29,6 +30,7 @@ const filterLabels: Record<ReviewFilter, string> = {
 function matchesFilter(item: CleanupPreviewItem, filter: ReviewFilter) {
   const email = item.email;
   if (filter === "all") return true;
+  if (filter === "spam_risk") return (email.spam_score ?? 0) >= 0.7 || email.spam_label === "spam";
   if (filter === "promotions") return email.category === "promotions";
   if (filter === "updates") return email.category === "updates";
   if (filter === "low_priority") return email.priority === "low";
@@ -307,6 +309,11 @@ export function CleanupReviewPage() {
                         <span className="rounded-full bg-moss/10 px-2.5 py-1 text-xs font-medium text-moss">{item.email.category ?? "uncategorized"}</span>
                         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{item.email.priority ?? "priority n/a"}</span>
                         <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">{Math.round(item.confidence * 100)}%</span>
+                        {item.email.spam_score !== null && item.email.spam_score >= 0.7 && (
+                          <span className="rounded-full bg-coral/10 px-2.5 py-1 text-xs font-medium text-coral">
+                            Spam risk {Math.round(item.email.spam_score * 100)}%
+                          </span>
+                        )}
                       </div>
                     </div>
                     <p className="mt-2 line-clamp-2 text-sm text-slate-600">{item.email.snippet}</p>

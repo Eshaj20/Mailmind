@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     search_rrf_k: int = 60  # Larger k softens rank differences when merging keyword/vector results.
     classification_rule_confidence_threshold: float = 0.75
     classification_batch_limit: int = 200
+    spam_score_threshold: float = 0.7
+    spam_high_risk_threshold: float = 0.85
+    spam_model_path: str = ""
+    spam_model_version: str = "pretrained-spam-v1"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

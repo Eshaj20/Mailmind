@@ -119,7 +119,7 @@ def build_inbox_health(db: Session, user: User) -> InboxHealth:
 
 def build_cleanup_preview(db: Session, user: User, limit: int = 25) -> CleanupPreview:
     candidates = [email for email in _user_emails(db, user) if is_cleanup_candidate(email)]
-    ranked = sorted(candidates, key=lambda email: (_cleanup_confidence(email), email.received_at or email.created_at), reverse=True)
+    ranked = sorted(candidates, key=lambda email: (_cleanup_rank(email), email.received_at or email.created_at), reverse=True)
     items = [
         CleanupPreviewItem(
             email=email,
@@ -284,7 +284,8 @@ def is_cleanup_candidate(email: Email) -> bool:
     priority = (email.priority or "").lower()
     text = " ".join(part or "" for part in [email.sender, email.subject, email.snippet, email.body_preview])
     return (
-        category in {"promotions", "social", "spam"}
+        (email.spam_score or 0.0) >= 0.7
+        or category in {"promotions", "social", "spam"}
         or NEWSLETTER_PATTERN.search(text) is not None
         or (category == "updates" and priority == "low")
     )
@@ -294,6 +295,10 @@ def _cleanup_reason(email: Email) -> str:
     category = (email.category or "").lower()
     priority = (email.priority or "").lower()
     text = " ".join(part or "" for part in [email.subject, email.snippet, email.body_preview])
+    if (email.spam_score or 0.0) >= 0.85:
+        return f"High spam risk ({round((email.spam_score or 0.0) * 100)}%)."
+    if (email.spam_score or 0.0) >= 0.7:
+        return f"Spam-risk signal ({round((email.spam_score or 0.0) * 100)}%)."
     if category in {"promotions", "social", "spam"}:
         return f"Classified as {category}."
     if category == "updates" and priority == "low":
@@ -303,8 +308,18 @@ def _cleanup_reason(email: Email) -> str:
     return "Low-value cleanup candidate."
 
 
+def _cleanup_rank(email: Email) -> float:
+    spam_score = email.spam_score or 0.0
+    confidence = _cleanup_confidence(email)
+    category = (email.category or "").lower()
+    category_boost = 0.08 if category == "spam" else 0.04 if category in {"promotions", "social"} else 0.0
+    return round(min(1.0, max(confidence, spam_score) + category_boost), 4)
+
+
 def _cleanup_confidence(email: Email) -> float:
     category = (email.category or "").lower()
+    if (email.spam_score or 0.0) >= 0.7:
+        return round(min(0.98, max(email.spam_score or 0.0, 0.88)), 2)
     if category in {"promotions", "spam"}:
         return 0.9
     if category in {"social", "updates"}:

@@ -95,6 +95,10 @@ class Email(Base):
     classification_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     classification_model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     classified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    spam_label: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    spam_score: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    spam_model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    spam_detected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

@@ -207,7 +207,7 @@ Feedback body:
 | `GET` | `/gmail/threads` | Yes | Lists synced Gmail threads. |
 | `POST` | `/gmail/threads/{thread_id}/summarize` | Yes | Generates or refreshes a thread summary. |
 
-Classification output tracks category, priority, reply need, confidence, model version, and timestamp. The email row stores the latest label snapshot for fast reads, while classification logs preserve historical model outputs for audit and evaluation.
+Classification output tracks category, priority, reply need, confidence, model version, spam label, spam score, spam model version, and timestamp. The email row stores the latest label snapshot for fast reads, while classification logs preserve historical model outputs for audit and evaluation.
 
 ## Reliability Notes
 

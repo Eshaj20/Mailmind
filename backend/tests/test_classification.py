@@ -234,6 +234,8 @@ def test_classify_endpoint_stores_metadata_and_summarizes_threads(client, db_ses
     by_id = {e["gmail_message_id"]: e for e in emails}
     assert by_id["msg-promo"]["category"] == "promotions"
     assert by_id["msg-promo"]["needs_reply"] is False
+    assert by_id["msg-promo"]["spam_label"] in {"ham", "spam"}
+    assert by_id["msg-promo"]["spam_score"] is not None
     assert by_id["msg-interview"]["category"] == "primary"
     assert by_id["msg-interview"]["needs_reply"] is True
     assert by_id["msg-interview"]["classification_model_version"] == "rule-engine-v1"

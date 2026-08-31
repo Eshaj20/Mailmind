@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.models.classification import EmailClassification
 from app.models.gmail import Email, EmailThread
 from app.models.user import User
+from app.services.spam_detection import detect_spam_fields
 from app.services.usage import estimate_tokens, log_ai_usage
 
 logger = logging.getLogger(__name__)
@@ -350,6 +351,22 @@ def classify_fields(
 
 def classify_email(db: Session, email: Email, llm_client: LLMClient | None = None) -> EmailClassification:
     result = classify_fields(email.subject, email.sender, email.snippet, email.body_preview, llm_client)
+    spam_result = detect_spam_fields(email.subject, email.sender, email.snippet, email.body_preview)
+    if spam_result.score >= settings.spam_high_risk_threshold:
+        result = ClassificationResult(
+            category="spam",
+            priority="low",
+            needs_reply=False,
+            confidence=max(result.confidence, spam_result.score),
+            stage=result.stage,
+            model_version=f"{result.model_version}+{spam_result.model_version}",
+            rationale=f"{result.rationale} Spam detector marked this as high risk.",
+        )
+
+    email.spam_label = spam_result.label
+    email.spam_score = spam_result.score
+    email.spam_model_version = spam_result.model_version
+    email.spam_detected_at = datetime.now(UTC)
 
     email.category = result.category
     email.priority = result.priority

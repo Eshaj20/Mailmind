@@ -53,6 +53,10 @@ class EmailRead(BaseModel):
     classification_confidence: float | None
     classification_model_version: str | None
     classified_at: datetime | None
+    spam_label: str | None
+    spam_score: float | None
+    spam_model_version: str | None
+    spam_detected_at: datetime | None
 
     model_config = {"from_attributes": True}
 

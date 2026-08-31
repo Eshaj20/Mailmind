@@ -37,6 +37,7 @@ Week 8 polish and production packaging is in progress:
 - Product mode banner and sync progress display for demo vs real Gmail workspaces
 - Reversible cleanup undo for archive/mark-read actions using an audit log of prior Gmail labels and read state
 - Dedicated cleanup review page (`/cleanup`) with filters, search, visible selection, bulk archive/mark-read, undo, and not-cleanup feedback
+- Spam-risk scoring with optional pretrained local model support, deterministic fallback, persisted spam metadata, and cleanup ranking boosts
 
 ## Validation Snapshot
 
@@ -213,6 +214,7 @@ flowchart TD
 - [Demo inbox mode](docs/demo-mode.md)
 - [Deployment guide](docs/deployment.md)
 - [Search benchmark notes](docs/search-benchmark.md)
+- [Spam detection and public dataset evaluation](docs/spam-detection.md)
 
 ## Repository Layout
 

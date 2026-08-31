@@ -38,6 +38,10 @@ export type Email = {
   classification_confidence: number | null;
   classification_model_version: string | null;
   classified_at: string | null;
+  spam_label: string | null;
+  spam_score: number | null;
+  spam_model_version: string | null;
+  spam_detected_at: string | null;
 };
 
 export type EmailPage = {
