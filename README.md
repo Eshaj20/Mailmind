@@ -97,6 +97,10 @@ npm run build
 ```
 
 
+## Production Deployment
+
+Use [Deployment guide](docs/deployment.md) for env vars, service commands, health checks, demo seeding, and the final smoke checklist.
+
 ## Demo Inbox Mode
 
 You can run MailMind end-to-end without Google OAuth or real Gmail data:
@@ -105,7 +109,7 @@ You can run MailMind end-to-end without Google OAuth or real Gmail data:
 docker compose exec backend python -m scripts.seed_demo_inbox --count 150 --reset
 ```
 
-Then login at `http://localhost:5173` with `demo@mailmind.local` / `DemoPass123!`.
+Then login at `http://localhost:5173` with `demo@mailmind.local` / `DemoPass123!`. Demo login is available from the auth page for deployed recruiter walkthroughs.
 ## Roadmap
 
 | Week | Milestone | Shippable Outcome |

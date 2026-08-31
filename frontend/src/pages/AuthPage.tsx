@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { Inbox, LogIn, UserPlus } from "lucide-react";
+import { Inbox, LogIn, PlayCircle, UserPlus } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -28,6 +28,13 @@ export function AuthPage() {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     authMutation.mutate();
+  }
+
+  function useDemoWorkspace() {
+    setMode("login");
+    setEmail("demo@mailmind.local");
+    setPassword("DemoPass123!");
+    setFullName("");
   }
 
   return (
@@ -126,6 +133,15 @@ export function AuthPage() {
           >
             {mode === "signup" ? <UserPlus size={18} aria-hidden /> : <LogIn size={18} aria-hidden />}
             {authMutation.isPending ? "Working..." : mode === "signup" ? "Create account" : "Login"}
+          </button>
+
+          <button
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-5 py-3 font-semibold text-ink transition hover:border-moss hover:text-moss"
+            type="button"
+            onClick={useDemoWorkspace}
+          >
+            <PlayCircle size={18} aria-hidden />
+            Use demo workspace
           </button>
         </form>
       </section>
