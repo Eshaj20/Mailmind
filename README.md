@@ -38,6 +38,7 @@ Week 8 polish and production packaging is in progress:
 - Reversible cleanup undo for archive/mark-read actions using an audit log of prior Gmail labels and read state
 - Dedicated cleanup review page (`/cleanup`) with filters, search, visible selection, bulk archive/mark-read, undo, and not-cleanup feedback
 - Spam-risk scoring with optional pretrained local model support, deterministic fallback, persisted spam metadata, and cleanup ranking boosts
+- Large synthetic inbox benchmark for 10k+ Gmail-like records, measuring classification coverage, spam-risk volume, cleanup candidates, and search latency without exposing private email data
 
 ## Validation Snapshot
 
@@ -50,6 +51,8 @@ Current AI classification smoke-eval uses the bundled 40-row synthetic seed set 
 | Needs-reply detection | 0.900 | 0.875 |
 
 Search benchmarking now compares `keyword`, `vector`, and `hybrid` retrieval modes with Hit@1, Hit@3, and MRR. Real search benchmark numbers require a synced inbox plus `backend/eval/search_queries.example.csv` expanded with actual `expected_email_id` labels.
+
+Large-inbox benchmarking can be run with `python -m scripts.benchmark_large_inbox --seed-count 10000 --reset`, producing `backend/eval/large_inbox_benchmark.md` for recruiter-safe aggregate metrics.
 ## Tech Stack
 
 - Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Pydantic, JWT, Gmail API, Celery, rate-limit guards, AI usage ledger
@@ -215,6 +218,7 @@ flowchart TD
 - [Deployment guide](docs/deployment.md)
 - [Search benchmark notes](docs/search-benchmark.md)
 - [Spam detection and public dataset evaluation](docs/spam-detection.md)
+- [Large inbox benchmark](docs/large-inbox-benchmark.md)
 
 ## Repository Layout
 

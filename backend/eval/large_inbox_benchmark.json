@@ -1,0 +1,166 @@
+{
+  "user_email": "large@mailmind.local",
+  "seed_result": {
+    "email": "large@mailmind.local",
+    "password": "LargePass123!",
+    "gmail_account": "large.inbox@mailmind.local",
+    "target_count": 10000,
+    "total_count": 10000,
+    "created_count": 10000,
+    "classified_count": 10000,
+    "elapsed_seconds": 92.845
+  },
+  "counts": {
+    "total_emails": 10000,
+    "classified_emails": 10000,
+    "spam_risk_emails": 1000,
+    "unread_emails": 3637
+  },
+  "search_index": {
+    "warmup_latency_ms": 15742.635
+  },
+  "inbox_health": {
+    "score": 54,
+    "cleanup_candidate_count": 6000,
+    "pending_reply_count": 2000,
+    "latency_ms": 971.816
+  },
+  "cleanup_preview": {
+    "total_candidates": 6000,
+    "returned_items": 100,
+    "estimated_time_saved_minutes": 3000,
+    "latency_ms": 850.049
+  },
+  "search": {
+    "queries": 5,
+    "modes": [
+      "keyword",
+      "vector",
+      "hybrid"
+    ],
+    "avg_latency_ms": 837.061,
+    "p95_latency_ms": 1182.441,
+    "rows": [
+      {
+        "query": "interview schedule",
+        "mode": "keyword",
+        "latency_ms": 888.759,
+        "result_count": 10,
+        "top_subject": "Backend Engineer interview schedule #1 / 2026-01",
+        "top_match_reason": "keyword"
+      },
+      {
+        "query": "interview schedule",
+        "mode": "vector",
+        "latency_ms": 846.561,
+        "result_count": 10,
+        "top_subject": "Backend Engineer interview schedule #2901 / 2026-09",
+        "top_match_reason": "semantic"
+      },
+      {
+        "query": "interview schedule",
+        "mode": "hybrid",
+        "latency_ms": 752.932,
+        "result_count": 10,
+        "top_subject": "Backend Engineer interview schedule #191 / 2026-11",
+        "top_match_reason": "keyword_and_semantic"
+      },
+      {
+        "query": "electricity bill",
+        "mode": "keyword",
+        "latency_ms": 829.015,
+        "result_count": 10,
+        "top_subject": "Electricity bill invoice is ready #3 / 2026-03",
+        "top_match_reason": "keyword"
+      },
+      {
+        "query": "electricity bill",
+        "mode": "vector",
+        "latency_ms": 658.537,
+        "result_count": 10,
+        "top_subject": "Electricity bill invoice is ready #3133 / 2026-01",
+        "top_match_reason": "semantic"
+      },
+      {
+        "query": "electricity bill",
+        "mode": "hybrid",
+        "latency_ms": 667.22,
+        "result_count": 10,
+        "top_subject": "Electricity bill invoice is ready #73 / 2026-01",
+        "top_match_reason": "keyword_and_semantic"
+      },
+      {
+        "query": "discount coupon",
+        "mode": "keyword",
+        "latency_ms": 782.955,
+        "result_count": 10,
+        "top_subject": "Limited time sale and discount coupon #2 / 2026-02",
+        "top_match_reason": "keyword"
+      },
+      {
+        "query": "discount coupon",
+        "mode": "vector",
+        "latency_ms": 991.877,
+        "result_count": 10,
+        "top_subject": "Electricity bill invoice is ready #7413 / 2026-09",
+        "top_match_reason": "semantic"
+      },
+      {
+        "query": "discount coupon",
+        "mode": "hybrid",
+        "latency_ms": 1182.441,
+        "result_count": 10,
+        "top_subject": "Limited time sale and discount coupon #12 / 2026-12",
+        "top_match_reason": "keyword_and_semantic"
+      },
+      {
+        "query": "credit card statement",
+        "mode": "keyword",
+        "latency_ms": 823.262,
+        "result_count": 10,
+        "top_subject": "Credit card statement generated #4 / 2026-04",
+        "top_match_reason": "keyword"
+      },
+      {
+        "query": "credit card statement",
+        "mode": "vector",
+        "latency_ms": 722.55,
+        "result_count": 10,
+        "top_subject": "Credit card statement generated #8994 / 2026-06",
+        "top_match_reason": "semantic"
+      },
+      {
+        "query": "credit card statement",
+        "mode": "hybrid",
+        "latency_ms": 822.323,
+        "result_count": 10,
+        "top_subject": "Credit card statement generated #244 / 2026-04",
+        "top_match_reason": "keyword_and_semantic"
+      },
+      {
+        "query": "cash reward verify account",
+        "mode": "keyword",
+        "latency_ms": 958.397,
+        "result_count": 10,
+        "top_subject": "You have won a cash reward #9 / 2026-09",
+        "top_match_reason": "keyword"
+      },
+      {
+        "query": "cash reward verify account",
+        "mode": "vector",
+        "latency_ms": 863.057,
+        "result_count": 10,
+        "top_subject": "You have won a cash reward #8889 / 2026-09",
+        "top_match_reason": "semantic"
+      },
+      {
+        "query": "cash reward verify account",
+        "mode": "hybrid",
+        "latency_ms": 766.033,
+        "result_count": 10,
+        "top_subject": "You have won a cash reward #9 / 2026-09",
+        "top_match_reason": "keyword"
+      }
+    ]
+  }
+}

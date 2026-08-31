@@ -89,14 +89,21 @@ def ensure_email_search_index(email: Email) -> None:
 def ensure_user_search_index(db: Session, user: User) -> int:
     emails = list(db.scalars(select(Email).where(Email.user_id == user.id)))
     updated = 0
+    is_postgres = _is_postgres(db)
+    missing_pgvector_ids = _emails_missing_pgvector(db, user) if is_postgres else set()
     postgres_updates: list[tuple[int, list[float]]] = []
+
     for email in emails:
         before = (email.search_text, email.search_embedding, email.search_embedding_model)
         ensure_email_search_index(email)
         after = (email.search_text, email.search_embedding, email.search_embedding_model)
-        if before != after:
+        changed = before != after
+        if changed:
             updated += 1
-        if _is_postgres(db) and email.search_embedding:
+        # Mirror vectors into the Postgres pgvector column only when the portable
+        # JSON embedding changed or the pgvector value is missing. This keeps
+        # repeated dashboard/search calls from rewriting every email vector.
+        if is_postgres and email.search_embedding and (changed or email.id in missing_pgvector_ids):
             postgres_updates.append((email.id, email.search_embedding))
 
     if updated:
@@ -106,7 +113,6 @@ def ensure_user_search_index(db: Session, user: User) -> int:
     if updated or postgres_updates:
         db.commit()
     return updated
-
 
 def hybrid_search_emails(db: Session, user: User, query: str, limit: int = 10) -> list[SearchResult]:
     return search_emails_by_mode(db=db, user=user, query=query, limit=limit, mode="hybrid")
@@ -361,6 +367,23 @@ def _merge_ranked_rows(db: Session, keyword_rows, vector_rows, limit: int) -> li
         reverse=True,
     )[:limit]
 
+
+def _emails_missing_pgvector(db: Session, user: User) -> set[int]:
+    # This checks the Postgres-only vector column. It is intentionally separated
+    # from the portable ORM model so SQLite tests do not need a pgvector column.
+    rows = db.execute(
+        text(
+            """
+            SELECT id
+            FROM emails
+            WHERE user_id = :user_id
+              AND search_embedding IS NOT NULL
+              AND search_embedding_vector IS NULL
+            """
+        ),
+        {"user_id": user.id},
+    )
+    return {int(row[0]) for row in rows}
 
 def _sync_pgvector_embeddings(db: Session, email_vectors: list[tuple[int, list[float]]]) -> None:
     # SQLAlchemy stores the portable JSON embedding; this mirrors it into the

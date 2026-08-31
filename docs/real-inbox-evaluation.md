@@ -10,6 +10,8 @@ Use a real inbox to produce trustworthy project numbers:
 - Search Hit@1, Hit@3, and MRR on 20-30 real search queries.
 - Sync reliability evidence across progressively larger Gmail batches.
 
+Before connecting a private Gmail account, run the synthetic large-inbox benchmark in `docs/large-inbox-benchmark.md`. It gives safe scalability numbers for classification coverage, spam-risk scoring, cleanup preview, and search latency without exposing personal email content.
+
 ## Safety Rules
 
 - Do not commit real exported email CSVs.
