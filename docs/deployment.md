@@ -139,6 +139,8 @@ If enabling real Gmail:
 
 ## Smoke Checks
 
+Use `docs/pre-deployment-checklist.md` for the full button and feature walkthrough before sharing the app publicly.
+
 Backend health:
 
 ```bash

@@ -115,6 +115,28 @@ def run_smoke(
         _require("total_jobs" in sync_health, "Sync health response did not include total_jobs")
         checks.append(SmokeCheck("gmail.sync.health", f"Sync jobs={sync_health['total_jobs']}"))
 
+        classification_summary = _get_json(client, base_url, "/gmail/classification/summary", token)
+        _require("total_classified" in classification_summary, "Classification summary missing total_classified")
+        checks.append(
+            SmokeCheck("gmail.classification.summary", f"Classified={classification_summary['total_classified']}")
+        )
+
+        classify_batch = _post_json(client, base_url, "/gmail/classify", token)
+        _require("classified_count" in classify_batch, "Classification batch response missing classified_count")
+        checks.append(SmokeCheck("gmail.classify", f"Classify endpoint processed={classify_batch['classified_count']}"))
+
+        senders = _get_json(client, base_url, "/gmail/senders", token)
+        _require(isinstance(senders, list), "Sender intelligence response was not a list")
+        checks.append(SmokeCheck("gmail.senders", f"Sender insights returned={len(senders)}"))
+
+        threads = _get_json(client, base_url, "/gmail/threads", token)
+        _require(isinstance(threads, list), "Threads response was not a list")
+        checks.append(SmokeCheck("gmail.threads", f"Threads returned={len(threads)}"))
+
+        evaluation = _get_json(client, base_url, "/gmail/classification/evaluation", token)
+        _require("report_markdown" in evaluation, "Evaluation response missing report_markdown")
+        checks.append(SmokeCheck("gmail.classification.evaluation", "Evaluation report loaded"))
+
         usage = _get_json(client, base_url, "/gmail/ai/usage", token)
         _require("total_tokens" in usage, "AI usage response did not include total_tokens")
         checks.append(SmokeCheck("gmail.ai.usage", f"AI usage tokens={usage['total_tokens']}"))

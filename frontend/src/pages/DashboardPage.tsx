@@ -301,9 +301,11 @@ export function DashboardPage() {
             {connectedAccount ? "Gmail connected" : "Connect Gmail"}
           </h2>
           <p className="mt-3 text-slate-600">
-            {connectedAccount
-              ? `${connectedAccount.google_email} is ready for background re-sync jobs.`
-              : "Start Google OAuth, store the refresh token securely, and persist the first Gmail sync."}
+            {isDemoWorkspace
+              ? `${connectedAccount?.google_email} is a seeded demo inbox for safe walkthroughs.`
+              : connectedAccount
+                ? `${connectedAccount.google_email} is ready for background re-sync jobs.`
+                : "Start Google OAuth, store the refresh token securely, and persist the first Gmail sync."}
           </p>
           {(connectMutation.isError || syncMutation.isError || classifyMutation.isError) && (
             <p className="mt-4 rounded-lg bg-coral/10 px-4 py-3 text-sm text-coral">
@@ -314,11 +316,11 @@ export function DashboardPage() {
             <button
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 font-semibold text-white hover:bg-moss disabled:cursor-not-allowed disabled:opacity-60"
               type="button"
-              disabled={connectMutation.isPending}
+              disabled={connectMutation.isPending || isDemoWorkspace}
               onClick={() => connectMutation.mutate()}
             >
               <Mail size={18} aria-hidden />
-              {connectedAccount ? "Reconnect Gmail" : connectMutation.isPending ? "Opening Google..." : "Connect Gmail"}
+              {isDemoWorkspace ? "Demo Gmail seeded" : connectedAccount ? "Reconnect Gmail" : connectMutation.isPending ? "Opening Google..." : "Connect Gmail"}
             </button>
             {connectedAccount && (
               <div className="grid gap-2">
@@ -334,11 +336,11 @@ export function DashboardPage() {
                 <button
                   className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-3 font-semibold text-ink hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                   type="button"
-                  disabled={syncMutation.isPending}
+                  disabled={syncMutation.isPending || isDemoWorkspace}
                   onClick={() => syncMutation.mutate({ accountId: connectedAccount.id, maxResults: syncLimit })}
                 >
                   <RefreshCw size={18} aria-hidden />
-                  {syncMutation.isPending ? "Queueing sync..." : `Queue ${syncLimit}-email sync`}
+                  {isDemoWorkspace ? "Sync disabled in demo" : syncMutation.isPending ? "Queueing sync..." : `Queue ${syncLimit}-email sync`}
                 </button>
               </div>
             )}
