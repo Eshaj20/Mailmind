@@ -247,6 +247,7 @@ export function DashboardPage() {
   const summary = classificationSummaryQuery.data;
   const emailPage = emailsQuery.data;
   const cleanupPreviewItems = cleanupPreviewQuery.data?.items ?? [];
+  const visibleCleanupPreviewItems = cleanupPreviewItems.slice(0, 6);
   const hasUnclassified = Boolean(summary && summary.total_unclassified > 0);
   const evalSampleSize = evaluationReportQuery.data?.report_markdown.match(/Sample size: (\d+)/)?.[1];
   const evalCategoryF1 = evaluationReportQuery.data?.report_markdown.match(/Category[\s\S]*?Macro F1: ([0-9.]+)/)?.[1];
@@ -501,7 +502,7 @@ export function DashboardPage() {
                   <button
                     className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                     type="button"
-                    onClick={() => setSelectedCleanupIds(cleanupPreviewItems.map((item) => item.email.id))}
+                    onClick={() => setSelectedCleanupIds(visibleCleanupPreviewItems.map((item) => item.email.id))}
                   >
                     Select visible
                   </button>
@@ -542,7 +543,7 @@ export function DashboardPage() {
                 </div>
               )}
               <div className="mt-5 space-y-3">
-                {cleanupPreviewItems.slice(0, 6).map((item) => (
+                {visibleCleanupPreviewItems.map((item) => (
                   <div key={item.email.id} className="rounded-lg border border-slate-100 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">

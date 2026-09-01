@@ -5,6 +5,13 @@ import { useNavigate } from "react-router-dom";
 
 import { login, signup } from "../api/client";
 
+type AuthForm = {
+  mode: "login" | "signup";
+  email: string;
+  password: string;
+  fullName?: string;
+};
+
 // AuthPage component for user authentication (signup/login)
 export function AuthPage() {
   const navigate = useNavigate();
@@ -15,11 +22,11 @@ export function AuthPage() {
 
   // useMutation hook for handling authentication (signup/login)
   const authMutation = useMutation({
-    mutationFn: async () => {
-      if (mode === "signup") {
-        await signup({ email, password, full_name: fullName || undefined });
+    mutationFn: async (form: AuthForm) => {
+      if (form.mode === "signup") {
+        await signup({ email: form.email, password: form.password, full_name: form.fullName || undefined });
       }
-      return login(email, password);
+      return login(form.email, form.password);
     },
     onSuccess: () => navigate("/"),
   });
@@ -27,7 +34,7 @@ export function AuthPage() {
   // Handle form submission for authentication
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    authMutation.mutate();
+    authMutation.mutate({ mode, email, password, fullName });
   }
 
   function useDemoWorkspace() {
@@ -35,6 +42,7 @@ export function AuthPage() {
     setEmail("demo@mailmind.dev");
     setPassword("DemoPass123!");
     setFullName("");
+    authMutation.mutate({ mode: "login", email: "demo@mailmind.dev", password: "DemoPass123!" });
   }
 
   return (
@@ -138,6 +146,7 @@ export function AuthPage() {
           <button
             className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-5 py-3 font-semibold text-ink transition hover:border-moss hover:text-moss"
             type="button"
+            disabled={authMutation.isPending}
             onClick={useDemoWorkspace}
           >
             <PlayCircle size={18} aria-hidden />
