@@ -1,12 +1,12 @@
 # Deployment Guide
 
-MailMind deploys as five services:
+MailMind runs locally as five services. For the first portfolio deployment, deploy the backend, frontend, and Postgres demo path first; add Redis and the Celery worker when enabling real Gmail background sync:
 
 - `backend`: FastAPI API server
 - `frontend`: React/Vite static frontend
-- `worker`: Celery worker for Gmail sync and async jobs
+- `worker`: Celery worker for Gmail sync and async jobs, optional for demo-only deployment
 - `postgres`: PostgreSQL with pgvector enabled
-- `redis`: Celery broker/result backend
+- `redis`: Celery broker/result backend, optional for demo-only deployment
 
 ## Recommended Portfolio Deployment
 

@@ -220,6 +220,7 @@ flowchart TD
 - [Real Gmail evaluation workflow](docs/real-inbox-evaluation.md)
 - [Demo inbox mode](docs/demo-mode.md)
 - [Deployment guide](docs/deployment.md)
+- [Render + Vercel deployment](docs/render-vercel-deployment.md)
 - [Pre-deployment feature checklist](docs/pre-deployment-checklist.md)
 - [Search benchmark notes](docs/search-benchmark.md)
 - [Spam detection and public dataset evaluation](docs/spam-detection.md)

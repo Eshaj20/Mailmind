@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: mailmind-backend
+    runtime: docker
+    rootDir: backend
+    dockerCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PROJECT_NAME
+        value: MailMind
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: GMAIL_SCOPES
+        value: openid email profile https://www.googleapis.com/auth/gmail.modify
+      - key: GMAIL_INITIAL_SYNC_MAX_RESULTS
+        value: "25"
+      - key: GMAIL_SYNC_QUERY
+        value: newer_than:30d
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: API_RATE_LIMIT_PER_MINUTE
+        value: "120"
