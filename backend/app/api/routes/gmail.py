@@ -54,7 +54,7 @@ from app.services.gmail import (
 from app.services.intelligence import build_cleanup_preview, build_inbox_health, build_sender_intelligence
 from app.services.search import hybrid_search_emails
 from app.services.sync_jobs import create_sync_job
-from app.services.sync_queue import SyncJobQueue
+from app.services.sync_queue import SyncJobQueue, SyncQueueUnavailableError
 from app.services.usage import build_ai_usage_summary
 
 router = APIRouter()
@@ -132,7 +132,17 @@ def queue_sync(
     job = create_sync_job(db, current_user, account, max_results=max_results)
     db.commit()
     db.refresh(job)
-    celery_task_id = queue.enqueue(job.id)
+    try:
+        celery_task_id = queue.enqueue(job.id)
+    except SyncQueueUnavailableError as exc:
+        job.status = "failed"
+        job.error_type = "queue_unavailable"
+        job.error_message = str(exc)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Gmail sync worker queue is unavailable",
+        ) from exc
     if celery_task_id:
         job.celery_task_id = celery_task_id
         db.commit()

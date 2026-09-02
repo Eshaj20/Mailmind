@@ -9,6 +9,7 @@ from app.models.gmail import Email, GmailAccount
 from app.models.sync_job import SyncJob
 from app.services.gmail import GmailMessage, GmailMessageBatch, TransientGmailSyncError, create_oauth_state
 from app.services.sync_jobs import create_sync_job, process_sync_job
+from app.services.sync_queue import SyncQueueUnavailableError
 
 # This test file contains tests for the Gmail integration endpoints of the FastAPI application, including OAuth flow, email synchronization, and handling of transient errors during sync jobs.
 class FakeGmailClient:
@@ -137,6 +138,11 @@ class FakeSyncQueue:
         self.enqueued.append(sync_job_id)
         return "fake-celery-task"
 
+
+class FailingSyncQueue:
+    def enqueue(self, sync_job_id: int) -> str:
+        raise SyncQueueUnavailableError("Gmail sync queue is unavailable")
+
 # A fake Gmail client that simulates fetching messages for classification, returning a predefined set of messages for testing purposes.
 def _auth_headers(client):
     signup = client.post(
@@ -211,7 +217,21 @@ def test_gmail_sync_endpoint_queues_job(client):
     assert jobs.status_code == 200
     assert len(jobs.json()) == 1
 
-# Test that the process_sync_job function correctly processes a sync job, updates the Gmail account's history ID, and persists the fetched emails in the database.
+# Test that the Gmail sync endpoint records a failed job when the queue broker is unavailable.
+def test_gmail_sync_endpoint_marks_job_failed_when_queue_unavailable(client, db_session):
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    client.app.dependency_overrides[get_sync_queue] = lambda: FailingSyncQueue()
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    response = client.post("/api/v1/gmail/sync", headers=headers)
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Gmail sync worker queue is unavailable"
+    job = db_session.scalar(select(SyncJob).order_by(SyncJob.id.desc()))
+    assert job.status == "failed"
+    assert job.error_type == "queue_unavailable"
+
 def test_process_sync_job_uses_history_id_incrementally(client, db_session):
     client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
     headers = _auth_headers(client)

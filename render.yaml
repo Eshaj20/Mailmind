@@ -1,10 +1,17 @@
 services:
+  - type: keyvalue
+    name: mailmind-redis
+    plan: free
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
+
   - type: web
     name: mailmind-backend
     runtime: docker
     rootDir: backend
     dockerCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
     healthCheckPath: /api/v1/health
+    maxShutdownDelaySeconds: 60
     envVars:
       - key: ENVIRONMENT
         value: production
@@ -28,7 +35,109 @@ services:
         value: "25"
       - key: GMAIL_SYNC_QUERY
         value: newer_than:30d
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: mailmind-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: mailmind-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: mailmind-redis
+          property: connectionString
+      - key: SYNC_JOB_MAX_ATTEMPTS
+        value: "3"
       - key: OPENAI_API_KEY
         sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_INPUT_COST_PER_1M_TOKENS
+        value: "0.0"
+      - key: OPENAI_OUTPUT_COST_PER_1M_TOKENS
+        value: "0.0"
+      - key: CLASSIFICATION_RULE_CONFIDENCE_THRESHOLD
+        value: "0.75"
+      - key: CLASSIFICATION_BATCH_LIMIT
+        value: "200"
+      - key: SPAM_SCORE_THRESHOLD
+        value: "0.7"
+      - key: SPAM_HIGH_RISK_THRESHOLD
+        value: "0.85"
+      - key: SPAM_MODEL_PATH
+        sync: false
+      - key: SPAM_MODEL_VERSION
+        value: pretrained-spam-v1
+      - key: API_RATE_LIMIT_PER_MINUTE
+        value: "120"
+
+  - type: worker
+    name: mailmind-worker
+    runtime: docker
+    rootDir: backend
+    dockerCommand: celery -A app.core.celery_app.celery_app worker --loglevel=INFO
+    maxShutdownDelaySeconds: 120
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PROJECT_NAME
+        value: MailMind
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: GMAIL_SCOPES
+        value: openid email profile https://www.googleapis.com/auth/gmail.modify
+      - key: GMAIL_INITIAL_SYNC_MAX_RESULTS
+        value: "25"
+      - key: GMAIL_SYNC_QUERY
+        value: newer_than:30d
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: mailmind-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: mailmind-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: mailmind-redis
+          property: connectionString
+      - key: SYNC_JOB_MAX_ATTEMPTS
+        value: "3"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_INPUT_COST_PER_1M_TOKENS
+        value: "0.0"
+      - key: OPENAI_OUTPUT_COST_PER_1M_TOKENS
+        value: "0.0"
+      - key: CLASSIFICATION_RULE_CONFIDENCE_THRESHOLD
+        value: "0.75"
+      - key: CLASSIFICATION_BATCH_LIMIT
+        value: "200"
+      - key: SPAM_SCORE_THRESHOLD
+        value: "0.7"
+      - key: SPAM_HIGH_RISK_THRESHOLD
+        value: "0.85"
+      - key: SPAM_MODEL_PATH
+        sync: false
+      - key: SPAM_MODEL_VERSION
+        value: pretrained-spam-v1
       - key: API_RATE_LIMIT_PER_MINUTE
         value: "120"

@@ -99,7 +99,7 @@ npm run build
 
 ## Production Deployment
 
-Use [Deployment guide](docs/deployment.md) for env vars, service commands, health checks, demo seeding, and the final smoke checklist. After deployment, run `python -m scripts.smoke_deployment --base-url <api>/api/v1` from `backend/`.
+Use [Deployment guide](docs/deployment.md) and [Render + Vercel deployment](docs/render-vercel-deployment.md) for real-user deployment with FastAPI, Celery worker, Redis, Postgres/pgvector, Gmail OAuth, health checks, and smoke tests. After deployment, run `python -m scripts.smoke_deployment --base-url <api>/api/v1` from `backend/`.
 
 ## Demo Inbox Mode
 

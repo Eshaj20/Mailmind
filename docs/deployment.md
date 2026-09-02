@@ -1,16 +1,16 @@
 # Deployment Guide
 
-MailMind runs locally as five services. For the first portfolio deployment, deploy the backend, frontend, and Postgres demo path first; add Redis and the Celery worker when enabling real Gmail background sync:
+MailMind runs locally as five services. For real-user deployment, deploy all five production pieces: frontend, backend, worker, PostgreSQL, and Redis.
 
 - `backend`: FastAPI API server
 - `frontend`: React/Vite static frontend
-- `worker`: Celery worker for Gmail sync and async jobs, optional for demo-only deployment
+- `worker`: Celery worker for Gmail sync and async jobs
 - `postgres`: PostgreSQL with pgvector enabled
-- `redis`: Celery broker/result backend, optional for demo-only deployment
+- `redis`: Celery broker/result backend
 
 ## Recommended Portfolio Deployment
 
-For the fastest recruiter-ready deployment, use:
+For the real-user deployment path, use:
 
 | Layer | Recommended Option | Notes |
 | --- | --- | --- |
@@ -45,7 +45,7 @@ GOOGLE_REDIRECT_URI=https://your-api-domain.example/api/v1/gmail/oauth/callback
 GMAIL_SCOPES=openid email profile https://www.googleapis.com/auth/gmail.modify
 ```
 
-OpenAI is optional because the local fallback classifier works without it:
+OpenAI is optional because the local fallback classifier works without it. For real-user AI classification quality, add the key after the core Gmail sync path is stable:
 
 ```env
 OPENAI_API_KEY=
@@ -103,6 +103,19 @@ SELECT extname FROM pg_extension WHERE extname = 'vector';
 ```
 
 The Week 5 migration creates the `vector` extension automatically on Postgres.
+
+## Real Gmail Rollout
+
+Do not start with a 12k+ inbox full sync. Use staged limits from the dashboard:
+
+| Stage | Sync limit | Goal |
+| --- | ---: | --- |
+| Smoke | 25 emails | Confirm OAuth, token encryption, worker, and DB writes. |
+| Small beta | 100 emails | Confirm retries, idempotent upserts, and dashboard performance. |
+| Medium beta | 500 emails | Confirm search/classification cost and sync progress. |
+| Large beta | 2,000+ emails | Confirm batching, user experience, and quota behavior. |
+
+Only widen `GMAIL_SYNC_QUERY` after these stages pass. Start with `newer_than:30d` so the first real-user run is bounded.
 
 ## Demo Data Setup
 
@@ -191,8 +204,12 @@ python -m scripts.smoke_deployment --base-url https://your-api-domain.example/ap
 - [ ] Redis URL works from both backend and worker.
 - [ ] `alembic upgrade head` succeeds.
 - [ ] Backend health returns `{"status":"ok"}`.
-- [ ] Demo inbox seeded on deployed DB.
-- [ ] Auth page demo login works.
+- [ ] Real Gmail OAuth test user can connect Gmail.
+- [ ] Worker consumes sync jobs and jobs do not stay queued.
+- [ ] First real sync succeeds with a 25-email limit.
+- [ ] Re-running sync updates existing Gmail message rows instead of duplicating them.
+- [ ] Demo inbox seeded on deployed DB if you still want a safe public walkthrough.
+- [ ] Auth page login works.
 - [ ] Dashboard loads inbox health, search, cleanup preview, and sender intelligence.
 - [ ] `python -m scripts.smoke_deployment --base-url <api>/api/v1` passes.
 - [ ] Cleanup action and undo work in demo mode.

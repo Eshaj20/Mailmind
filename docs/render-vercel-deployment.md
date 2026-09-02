@@ -1,13 +1,13 @@
 # Render + Vercel Deployment
 
-This is the recommended portfolio deployment path for MailMind.
+This is the recommended real-user deployment path for MailMind.
 
 ## Target Setup
 
 | Component | Platform | Why |
 | --- | --- | --- |
 | Backend API | Render web service | Docker support, health checks, simple logs. |
-| Celery worker | Render worker service | Same backend image, separate worker command. |
+| Celery worker | Render worker service | Keeps large Gmail sync jobs outside request/response timeouts. |
 | PostgreSQL | Supabase, Neon, Railway, or Render Postgres | Needs pgvector support. |
 | Redis | Upstash, Railway, or Render Redis | Queue for Celery jobs. |
 | Frontend | Vercel | Simple Vite static deployment. |
@@ -35,9 +35,15 @@ CELERY_RESULT_BACKEND=redis://...
 
 For TLS Redis providers, use the `rediss://` URL they provide.
 
-## 3. Render Backend
+## 3. Render Backend + Worker
 
-Use `render.yaml` as the service blueprint or create services manually.
+Use `render.yaml` as the service blueprint or create services manually. The blueprint defines:
+
+```text
+mailmind-backend  -> FastAPI web API
+mailmind-worker   -> Celery background worker
+mailmind-redis    -> queue/result backend
+```
 
 Backend web service:
 
@@ -59,9 +65,27 @@ Health check path:
 
 Required backend env vars are in `.env.production.example`.
 
-## 3. Seed Demo Data
+## 4. Real Gmail OAuth
 
-After backend deploy and migrations pass, run this from the Render shell/job for the backend service:
+In Google Cloud OAuth credentials, add:
+
+```text
+Authorized redirect URI:
+https://your-render-api.onrender.com/api/v1/gmail/oauth/callback
+```
+
+Set the same value in Render:
+
+```env
+GOOGLE_REDIRECT_URI=https://your-render-api.onrender.com/api/v1/gmail/oauth/callback
+GMAIL_SCOPES=openid email profile https://www.googleapis.com/auth/gmail.modify
+```
+
+Use `gmail.modify` only because MailMind supports user-confirmed archive and mark-read actions. Keep early testing limited to Google OAuth test users until the app is verified.
+
+## 5. Optional Demo Data
+
+After backend deploy and migrations pass, you can still seed safe demo data from the backend service shell/job:
 
 ```bash
 python -m scripts.seed_demo_inbox --count 150 --reset
@@ -74,7 +98,7 @@ email: demo@mailmind.dev
 password: DemoPass123!
 ```
 
-## 4. Vercel Frontend
+## 6. Vercel Frontend
 
 Import the GitHub repo into Vercel.
 
@@ -94,7 +118,20 @@ VITE_API_BASE_URL=https://your-render-api.onrender.com/api/v1
 
 `frontend/vercel.json` includes SPA rewrites so `/cleanup` works after refresh.
 
-## 5. Smoke Test
+## 7. Real Gmail Rollout
+
+Start with bounded sync sizes before syncing a large inbox:
+
+| Stage | Sync limit | Goal |
+| --- | ---: | --- |
+| Smoke | 25 emails | Confirm OAuth, token encryption, worker, and DB writes. |
+| Small beta | 100 emails | Confirm retries, idempotent upserts, and dashboard performance. |
+| Medium beta | 500 emails | Confirm search/classification cost and sync progress. |
+| Large beta | 2,000+ emails | Confirm batching, user experience, and Gmail quota behavior. |
+
+Keep `GMAIL_SYNC_QUERY=newer_than:30d` for early testing. Widen it only after smaller stages are stable.
+
+## 8. Smoke Test
 
 From local `backend/`, run:
 
@@ -108,21 +145,4 @@ Expected output starts with:
 MailMind deployment smoke passed
 ```
 
-## 6. Real Gmail Background Sync Later
-
-For demo-only portfolio deployment, Gmail OAuth, Redis, and Celery worker can stay disabled. The demo inbox works without Google credentials or background sync.
-
-When enabling real Gmail background sync, add Redis and a worker service with this command:
-
-```bash
-celery -A app.core.celery_app.celery_app worker --loglevel=INFO
-```
-
-Then set:
-
-```env
-GOOGLE_REDIRECT_URI=https://your-render-api.onrender.com/api/v1/gmail/oauth/callback
-CORS_ORIGINS=https://your-vercel-app.vercel.app
-```
-
-Add the same callback URL in Google Cloud OAuth credentials.
+Real Gmail mode is healthy only when queued jobs move to `running` and then `succeeded`. If jobs stay `queued`, the worker is not running or Redis is not reachable.
