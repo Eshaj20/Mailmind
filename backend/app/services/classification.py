@@ -30,13 +30,24 @@ STAGE_RULE = "rule"
 STAGE_LLM = "llm"
 STAGE_LIGHTWEIGHT = "lightweight"
 
-RULE_MODEL_VERSION = "rule-engine-v2"
-LIGHTWEIGHT_MODEL_VERSION = "lightweight-v2"
+RULE_MODEL_VERSION = "rule-engine-v3"
+LIGHTWEIGHT_MODEL_VERSION = "lightweight-v3"
 
 _SENDER_AUTOMATED_PATTERN = re.compile(
     r"no-?reply|notifications?|newsletter|updates@|billing@|receipts?@|do-?not-?reply", re.IGNORECASE
 )
 _TRUSTED_GOOGLE_SENDER_PATTERN = re.compile(r"(?:^|[<@.\s])(?:accounts\.)?google\.com(?:[>\s]|$)", re.IGNORECASE)
+_DIRECT_REPLY_REQUEST_PATTERN = re.compile(
+    r"\b(?:please\s+)?reply\b"
+    r"|\bplease\s+respond\b"
+    r"|\brespond\s+(?:to\s+this\s+email|with\b|by\s+(?:eod|end\s+of\s+day|[a-z]+day|\d{1,2}\b))"
+    r"|\blet\s+me\s+know\b"
+    r"|\brsvp\b"
+    r"|\bplease\s+confirm\b"
+    r"|\bcan\s+we\s+(?:schedule|meet|talk|discuss)\b"
+    r"|\b(?:can|could|would)\s+you\s+(?:share|send|confirm|join|attend|meet|schedule|provide|review)\b",
+    re.IGNORECASE,
+)
 
 _PROMO_KEYWORDS = ["% off", "sale", "discount", "unsubscribe", "limited time", "deal", "coupon", "clearance"]
 _SOCIAL_KEYWORDS = [
@@ -78,18 +89,6 @@ _IMPORTANT_KEYWORDS = [
     "meeting request",
     "please respond",
     "reminder:",
-    "rsvp",
-]
-_REPLY_KEYWORDS = [
-    "please respond",
-    "respond by",
-    "reply by",
-    "reply with",
-    "let me know",
-    "please confirm",
-    "can we",
-    "could you",
-    "would you",
     "rsvp",
 ]
 _ACCOUNT_SECURITY_KEYWORDS = [
@@ -347,7 +346,7 @@ def _infer_priority(category: str, important_hits: int, text: str) -> str:
 def _infer_needs_reply(category: str, text: str, is_automated_sender: bool) -> bool:
     if is_automated_sender or category in ("promotions", "social", "spam", "updates"):
         return False
-    return category == "primary" and any(kw in text for kw in _REPLY_KEYWORDS)
+    return category == "primary" and bool(_DIRECT_REPLY_REQUEST_PATTERN.search(text))
 
 
 def _result_from_llm_payload(payload: dict, model: str) -> ClassificationResult | None:

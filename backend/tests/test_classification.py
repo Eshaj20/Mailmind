@@ -162,15 +162,20 @@ def test_rule_engine_flags_important_email_as_primary_high_priority():
 
 
 def test_lightweight_does_not_confuse_application_cta_with_a_reply_request():
-    result = classify_fields(
-        subject="Elevate your banking career with IDFC FIRST Bank!",
-        sender="IDFC FIRST Bank <opportunities@jobs.idfcfirstbank.com>",
-        snippet="We invite applications for the Elevate Program. Apply now.",
-        body_preview="An opportunity for ambitious young professionals. Apply through the program page.",
-        llm_client=LLMClient(api_key=""),
-    )
+    for subject, snippet in (
+        ("Elevate your banking career", "We invite applications for the Elevate Program. Apply now."),
+        ("New course available", "Register today and explore the curriculum."),
+        ("Your account statement", "View or download your statement online."),
+    ):
+        result = classify_fields(
+            subject=subject,
+            sender="Opportunities <opportunities@example.com>",
+            snippet=snippet,
+            body_preview="Use the linked page to complete this action.",
+            llm_client=LLMClient(api_key=""),
+        )
 
-    assert result.needs_reply is False
+        assert result.needs_reply is False
 
 
 def test_rule_engine_prioritizes_trusted_google_account_security_alert():
@@ -280,7 +285,7 @@ def test_classify_endpoint_stores_metadata_and_summarizes_threads(client, db_ses
     assert by_id["msg-promo"]["spam_score"] is not None
     assert by_id["msg-interview"]["category"] == "primary"
     assert by_id["msg-interview"]["needs_reply"] is True
-    assert by_id["msg-interview"]["classification_model_version"] == "rule-engine-v2"
+    assert by_id["msg-interview"]["classification_model_version"] == "rule-engine-v3"
 
 # Verify that the threads are stored in the database with the expected summary metadata
     threads = client.get("/api/v1/gmail/threads", headers=headers).json()
@@ -308,7 +313,7 @@ def test_classify_endpoint_uses_injected_llm_client(client, db_session):
     client.post("/api/v1/gmail/classify", headers=headers)
 
     email = db_session.scalar(select(Email).where(Email.gmail_message_id == "msg-promo"))
-    assert email.classification_model_version == "rule-engine-v2"  # confident rule match wins, LLM unused
+    assert email.classification_model_version == "rule-engine-v3"  # confident rule match wins, LLM unused
 
 # Verify that the thread summary is stored in the database with the expected summary and model version.
     thread = db_session.scalar(select(EmailThread).where(EmailThread.gmail_thread_id == "thread-promo"))
@@ -328,7 +333,7 @@ def test_thread_summarize_endpoint(client, db_session):
     response = client.post(f"/api/v1/gmail/threads/{thread.id}/summarize", headers=headers)
     assert response.status_code == 200
     assert response.json()["summary"]
-    assert response.json()["summary_model_version"] == "lightweight-v2"
+    assert response.json()["summary_model_version"] == "lightweight-v3"
 
 # Test that the classify_unclassified_emails service function is idempotent, meaning that running it multiple times does not change the classification results for already classified emails.
 def test_classify_unclassified_emails_service_is_idempotent(db_session):

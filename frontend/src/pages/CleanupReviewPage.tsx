@@ -245,26 +245,28 @@ export function CleanupReviewPage() {
               </button>
               <span className="text-sm text-slate-500">{selectedCount} selected from {visibleItems.length} visible</span>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
-                type="button"
-                disabled={selectedCount === 0 || cleanupMutation.isPending}
-                onClick={() => confirmCleanup("archive")}
-              >
-                <Archive size={16} aria-hidden />
-                Archive selected
-              </button>
-              <button
-                className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
-                type="button"
-                disabled={selectedCount === 0 || cleanupMutation.isPending}
-                onClick={() => confirmCleanup("mark_read")}
-              >
-                <Check size={16} aria-hidden />
-                Mark read
-              </button>
-            </div>
+            {selectedCount > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+                  type="button"
+                  disabled={cleanupMutation.isPending}
+                  onClick={() => confirmCleanup("archive")}
+                >
+                  <Archive size={16} aria-hidden />
+                  Archive selected
+                </button>
+                <button
+                  className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
+                  type="button"
+                  disabled={cleanupMutation.isPending}
+                  onClick={() => confirmCleanup("mark_read")}
+                >
+                  <Check size={16} aria-hidden />
+                  Mark read
+                </button>
+              </div>
+            )}
           </div>
 
           {(cleanupMutation.isError || undoMutation.isError || feedbackMutation.isError) && (
