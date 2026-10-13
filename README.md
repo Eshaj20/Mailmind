@@ -80,8 +80,3 @@ records and a repeat sync creates no duplicates.
 - [Demo inbox mode](docs/demo-mode.md)
 - [Search benchmark](docs/search-benchmark.md)
 
-## Security Notes
-
-Never commit `.env` files, OAuth client secrets, SMTP passwords, access tokens,
-or exported Gmail data. Gmail access is granted through OAuth and can be revoked
-from the Google Account that authorized it.
