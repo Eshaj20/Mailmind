@@ -8,6 +8,10 @@ export type SignupPayload = {
   full_name?: string;
 };
 
+export type Message = {
+  detail: string;
+};
+
 export type User = {
   id: number;
   email: string;
@@ -19,6 +23,7 @@ export type GmailAccount = {
   id: number;
   google_email: string;
   history_id: string | null;
+  initial_sync_complete: boolean;
   sync_status: string;
   last_synced_at: string | null;
 };
@@ -223,6 +228,8 @@ export type SyncJob = {
   synced_count: number;
   created_count: number;
   updated_count: number;
+  has_more: boolean;
+  continuation_job_id: number | null;
   celery_task_id: string | null;
   error_type: string | null;
   error_message: string | null;
@@ -297,6 +304,20 @@ export async function login(email: string, password: string) {
   });
   setToken(token.access_token);
   return token;
+}
+
+export async function requestPasswordReset(email: string) {
+  return request<Message>("/auth/password-reset/request", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function confirmPasswordReset(token: string, password: string) {
+  return request<Message>("/auth/password-reset/confirm", {
+    method: "POST",
+    body: JSON.stringify({ token, password }),
+  });
 }
 
 export async function getMe() {

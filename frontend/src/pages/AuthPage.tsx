@@ -1,9 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
-import { Inbox, LogIn, PlayCircle, UserPlus } from "lucide-react";
+import { ArrowLeft, Inbox, LogIn, PlayCircle, UserPlus } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { login, signup } from "../api/client";
+import { login, requestPasswordReset, signup } from "../api/client";
 
 type AuthForm = {
   mode: "login" | "signup";
@@ -15,10 +15,11 @@ type AuthForm = {
 // AuthPage component for user authentication (signup/login)
 export function AuthPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"login" | "signup">("signup");
+  const [mode, setMode] = useState<"login" | "signup" | "forgot">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const demoEnabled = import.meta.env.VITE_ENABLE_DEMO === "true";
 
   // useMutation hook for handling authentication (signup/login)
   const authMutation = useMutation({
@@ -31,9 +32,17 @@ export function AuthPage() {
     onSuccess: () => navigate("/"),
   });
 
+  const resetRequestMutation = useMutation({
+    mutationFn: requestPasswordReset,
+  });
+
   // Handle form submission for authentication
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (mode === "forgot") {
+      resetRequestMutation.mutate(email);
+      return;
+    }
     authMutation.mutate({ mode, email, password, fullName });
   }
 
@@ -64,7 +73,7 @@ export function AuthPage() {
 
       <section className="flex items-center bg-white px-6 py-10 shadow-panel sm:px-10">
         <form className="w-full" onSubmit={submit}>
-          <div className="mb-8 inline-flex rounded-lg bg-slate-100 p-1">
+          {mode !== "forgot" ? <div className="mb-8 inline-flex rounded-lg bg-slate-100 p-1">
             <button
               className={`rounded-md px-4 py-2 text-sm font-medium ${
                 mode === "signup" ? "bg-white text-ink shadow-sm" : "text-slate-600"
@@ -83,11 +92,25 @@ export function AuthPage() {
             >
               Login
             </button>
-          </div>
+          </div> : (
+            <button
+              className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-ink"
+              type="button"
+              onClick={() => setMode("login")}
+            >
+              <ArrowLeft size={16} aria-hidden /> Back to login
+            </button>
+          )}
 
           <h2 className="text-2xl font-semibold text-ink">
-            {mode === "signup" ? "Create your workspace" : "Welcome back"}
+            {mode === "signup" ? "Create your workspace" : mode === "forgot" ? "Reset your password" : "Welcome back"}
           </h2>
+
+          {mode === "forgot" && (
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              Enter your account email and we will send a single-use reset link.
+            </p>
+          )}
 
           <div className="mt-8 space-y-5">
             {mode === "signup" && (
@@ -114,7 +137,7 @@ export function AuthPage() {
               />
             </label>
 
-            <label className="block">
+            {mode !== "forgot" && <label className="block">
               <span className="text-sm font-medium text-slate-700">Password</span>
               <input
                 className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-ink outline-none focus:border-moss focus:ring-2 focus:ring-moss/20"
@@ -125,7 +148,7 @@ export function AuthPage() {
                 required
                 autoComplete={mode === "signup" ? "new-password" : "current-password"}
               />
-            </label>
+            </label>}
           </div>
 
           {authMutation.isError && (
@@ -134,16 +157,44 @@ export function AuthPage() {
             </p>
           )}
 
+          {resetRequestMutation.isError && (
+            <p className="mt-4 rounded-lg bg-coral/10 px-4 py-3 text-sm text-coral">
+              {resetRequestMutation.error.message}
+            </p>
+          )}
+
+          {resetRequestMutation.isSuccess && (
+            <p className="mt-4 rounded-lg bg-mint px-4 py-3 text-sm text-ink">
+              {resetRequestMutation.data.detail}
+            </p>
+          )}
+
           <button
             className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-5 py-3 font-semibold text-white transition hover:bg-moss disabled:cursor-not-allowed disabled:opacity-60"
             type="submit"
-            disabled={authMutation.isPending}
+            disabled={authMutation.isPending || resetRequestMutation.isPending}
           >
             {mode === "signup" ? <UserPlus size={18} aria-hidden /> : <LogIn size={18} aria-hidden />}
-            {authMutation.isPending ? "Working..." : mode === "signup" ? "Create account" : "Login"}
+            {authMutation.isPending || resetRequestMutation.isPending
+              ? "Working..."
+              : mode === "signup"
+                ? "Create account"
+                : mode === "forgot"
+                  ? "Send reset link"
+                  : "Login"}
           </button>
 
-          <button
+          {mode === "login" && (
+            <button
+              className="mt-4 text-sm font-medium text-moss hover:text-ink"
+              type="button"
+              onClick={() => setMode("forgot")}
+            >
+              Forgot password?
+            </button>
+          )}
+
+          {demoEnabled && mode !== "forgot" && <button
             className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-5 py-3 font-semibold text-ink transition hover:border-moss hover:text-moss"
             type="button"
             disabled={authMutation.isPending}
@@ -151,7 +202,7 @@ export function AuthPage() {
           >
             <PlayCircle size={18} aria-hidden />
             Use demo workspace
-          </button>
+          </button>}
         </form>
       </section>
     </main>
