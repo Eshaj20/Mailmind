@@ -1,4 +1,6 @@
 .env
+.env.beta
+.env.selfhosted
 __pycache__/
 *.py[cod]
 .pytest_cache/
