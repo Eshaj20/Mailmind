@@ -30,14 +30,13 @@ STAGE_RULE = "rule"
 STAGE_LLM = "llm"
 STAGE_LIGHTWEIGHT = "lightweight"
 
-RULE_MODEL_VERSION = "rule-engine-v1"
-LIGHTWEIGHT_MODEL_VERSION = "lightweight-v1"
+RULE_MODEL_VERSION = "rule-engine-v2"
+LIGHTWEIGHT_MODEL_VERSION = "lightweight-v2"
 
 _SENDER_AUTOMATED_PATTERN = re.compile(
     r"no-?reply|notifications?|newsletter|updates@|billing@|receipts?@|do-?not-?reply", re.IGNORECASE
 )
 _TRUSTED_GOOGLE_SENDER_PATTERN = re.compile(r"(?:^|[<@.\s])(?:accounts\.)?google\.com(?:[>\s]|$)", re.IGNORECASE)
-_QUESTION_PATTERN = re.compile(r"\?")
 
 _PROMO_KEYWORDS = ["% off", "sale", "discount", "unsubscribe", "limited time", "deal", "coupon", "clearance"]
 _SOCIAL_KEYWORDS = [
@@ -81,7 +80,18 @@ _IMPORTANT_KEYWORDS = [
     "reminder:",
     "rsvp",
 ]
-_REPLY_KEYWORDS = ["please respond", "action required", "rsvp", "let me know", "confirm", "can we", "could you"]
+_REPLY_KEYWORDS = [
+    "please respond",
+    "respond by",
+    "reply by",
+    "reply with",
+    "let me know",
+    "please confirm",
+    "can we",
+    "could you",
+    "would you",
+    "rsvp",
+]
 _ACCOUNT_SECURITY_KEYWORDS = [
     "security alert",
     "app password created",
@@ -100,7 +110,9 @@ _CLASSIFY_SYSTEM_PROMPT = (
     "You are an email triage assistant for an inbox cleaner. Classify the email and reply with a single "
     "JSON object only, no prose, with keys: category (one of "
     f"{CATEGORIES}), priority (one of {PRIORITIES}), needs_reply (true/false), "
-    "confidence (0-1 float), rationale (short string)."
+    "confidence (0-1 float), rationale (short string). needs_reply is true only when the sender "
+    "explicitly requests an email response. A call to action such as apply, click, read, browse, "
+    "or consider an offer does not by itself require a reply."
 )
 
 # The LLMClient class is a wrapper around an OpenAI-compatible chat completions API, used for stage-two classification of emails and thread summaries. It provides methods for classifying email fields and summarizing email threads, handling API requests and responses, and managing configuration settings such as API keys and model selection.
@@ -335,9 +347,7 @@ def _infer_priority(category: str, important_hits: int, text: str) -> str:
 def _infer_needs_reply(category: str, text: str, is_automated_sender: bool) -> bool:
     if is_automated_sender or category in ("promotions", "social", "spam", "updates"):
         return False
-    if _QUESTION_PATTERN.search(text) or any(kw in text for kw in _REPLY_KEYWORDS):
-        return True
-    return category == "primary"
+    return category == "primary" and any(kw in text for kw in _REPLY_KEYWORDS)
 
 
 def _result_from_llm_payload(payload: dict, model: str) -> ClassificationResult | None:
