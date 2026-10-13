@@ -160,6 +160,20 @@ def test_rule_engine_flags_important_email_as_primary_high_priority():
     assert result.priority == "high"
     assert result.needs_reply is True
 
+
+def test_rule_engine_prioritizes_trusted_google_account_security_alert():
+    result = apply_rule_engine(
+        subject="Security alert",
+        sender="Google <no-reply@accounts.google.com>",
+        snippet="App password created to sign in to your account.",
+        body_preview="If you did not generate this password, check and secure your account.",
+    )
+
+    assert result is not None
+    assert result.category == "primary"
+    assert result.priority == "high"
+    assert result.needs_reply is False
+
 # Test that the rule engine returns None for an ambiguous email that doesn't match any specific rules.
 def test_rule_engine_returns_none_for_ambiguous_email():
     result = apply_rule_engine(

@@ -286,7 +286,7 @@ export function CleanupReviewPage() {
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
           {cleanupPreviewQuery.isLoading && <p className="p-6 text-sm text-slate-500">Loading cleanup candidates...</p>}
           {!cleanupPreviewQuery.isLoading && !connectedAccount && (
-            <p className="p-6 text-sm text-slate-500">Connect Gmail or seed demo inbox data to review cleanup candidates.</p>
+            <p className="p-6 text-sm text-slate-500">Connect Gmail to review cleanup candidates.</p>
           )}
           {!cleanupPreviewQuery.isLoading && connectedAccount && visibleItems.length === 0 && (
             <p className="p-6 text-sm text-slate-500">No cleanup candidates match this view.</p>

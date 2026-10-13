@@ -365,8 +365,9 @@ export async function getSyncJobs() {
   return request<SyncJob[]>("/gmail/sync/jobs");
 }
 
-export async function classifyEmails() {
-  return request<ClassificationBatch>("/gmail/classify", { method: "POST" });
+export async function classifyEmails(force = false) {
+  const query = force ? "?force=true" : "";
+  return request<ClassificationBatch>(`/gmail/classify${query}`, { method: "POST" });
 }
 
 export async function getClassificationSummary() {

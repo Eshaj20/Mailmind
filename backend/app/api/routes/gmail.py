@@ -473,12 +473,13 @@ def create_email_feedback(
 @router.post("/classify", response_model=ClassificationBatchRead)
 def classify_emails(
     request: Request,
+    force: bool = False,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     llm_client: LLMClient = Depends(get_llm_client),
 ) -> ClassificationBatchRead:
     _enforce_expensive_action_limit(request)
-    stats = classify_unclassified_emails(db, current_user, llm_client=llm_client)
+    stats = classify_unclassified_emails(db, current_user, llm_client=llm_client, force=force)
     return ClassificationBatchRead(
         classified_count=stats.classified_count,
         by_category=stats.by_category or {},

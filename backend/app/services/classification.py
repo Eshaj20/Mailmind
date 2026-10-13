@@ -36,6 +36,7 @@ LIGHTWEIGHT_MODEL_VERSION = "lightweight-v1"
 _SENDER_AUTOMATED_PATTERN = re.compile(
     r"no-?reply|notifications?|newsletter|updates@|billing@|receipts?@|do-?not-?reply", re.IGNORECASE
 )
+_TRUSTED_GOOGLE_SENDER_PATTERN = re.compile(r"(?:^|[<@.\s])(?:accounts\.)?google\.com(?:[>\s]|$)", re.IGNORECASE)
 _QUESTION_PATTERN = re.compile(r"\?")
 
 _PROMO_KEYWORDS = ["% off", "sale", "discount", "unsubscribe", "limited time", "deal", "coupon", "clearance"]
@@ -81,6 +82,15 @@ _IMPORTANT_KEYWORDS = [
     "rsvp",
 ]
 _REPLY_KEYWORDS = ["please respond", "action required", "rsvp", "let me know", "confirm", "can we", "could you"]
+_ACCOUNT_SECURITY_KEYWORDS = [
+    "security alert",
+    "app password created",
+    "new sign-in",
+    "new sign in",
+    "password changed",
+    "password reset",
+    "suspicious activity",
+]
 
 # The _CLASSIFY_SYSTEM_PROMPT is a system prompt used for stage-two classification of emails using an OpenAI-compatible chat completions API. 
 
@@ -199,6 +209,27 @@ def _combined_text(subject: str | None, snippet: str | None, body_preview: str |
     return " ".join(filter(None, [subject, snippet, body_preview])).lower()
 
 
+def _trusted_account_security_result(sender: str | None, text: str) -> ClassificationResult | None:
+    """Prioritize genuine Google account-security events over generic update signals.
+
+    This is deliberately sender-specific. A generic "security alert" from an
+    unknown sender must still be evaluated by the spam and normal rule layers.
+    """
+    if not _TRUSTED_GOOGLE_SENDER_PATTERN.search(sender or ""):
+        return None
+    if not any(keyword in text for keyword in _ACCOUNT_SECURITY_KEYWORDS):
+        return None
+    return ClassificationResult(
+        category="primary",
+        priority="high",
+        needs_reply=False,
+        confidence=0.95,
+        stage=STAGE_RULE,
+        model_version=RULE_MODEL_VERSION,
+        rationale="Trusted Google account-security event requires prompt review.",
+    )
+
+
 def apply_rule_engine(
     subject: str | None, sender: str | None, snippet: str | None, body_preview: str | None
 ) -> ClassificationResult | None:
@@ -206,6 +237,9 @@ def apply_rule_engine(
     so the caller can escalate to stage two instead of guessing."""
     text = _combined_text(subject, snippet, body_preview)
     sender_l = (sender or "").lower()
+    security_result = _trusted_account_security_result(sender, text)
+    if security_result is not None:
+        return security_result
     is_automated_sender = bool(_SENDER_AUTOMATED_PATTERN.search(sender_l))
 
     scores = {category: 0 for category in CATEGORIES}
@@ -421,17 +455,14 @@ def classify_unclassified_emails(
     user: User,
     llm_client: LLMClient | None = None,
     limit: int | None = None,
+    force: bool = False,
 ) -> ClassificationBatchStats:
     llm_client = llm_client or LLMClient()
     limit = limit or settings.classification_batch_limit
-    emails = list(
-        db.scalars(
-            select(Email)
-            .where(Email.user_id == user.id, Email.classified_at.is_(None))
-            .order_by(Email.received_at.desc())
-            .limit(limit)
-        )
-    )
+    query = select(Email).where(Email.user_id == user.id)
+    if not force:
+        query = query.where(Email.classified_at.is_(None))
+    emails = list(db.scalars(query.order_by(Email.received_at.desc()).limit(limit)))
 
     stats = ClassificationBatchStats()
     touched_thread_ids: set[int] = set()

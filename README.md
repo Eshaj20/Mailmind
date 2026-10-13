@@ -77,6 +77,5 @@ records and a repeat sync creates no duplicates.
 - [API reference](docs/api.md)
 - [Deployment guide](docs/deployment.md)
 - [Self-hosted installation](docs/self-hosted.md)
-- [Demo inbox mode](docs/demo-mode.md)
 - [Search benchmark](docs/search-benchmark.md)
 

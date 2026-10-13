@@ -142,7 +142,7 @@ export function DashboardPage() {
     },
   });
   const classifyMutation = useMutation({
-    mutationFn: classifyEmails,
+    mutationFn: (force: boolean) => classifyEmails(force),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["classification-summary"] });
       queryClient.invalidateQueries({ queryKey: ["emails"] });
@@ -175,13 +175,10 @@ export function DashboardPage() {
   }
 
   const connectedAccount = accountsQuery.data?.[0];
-  const isDemoWorkspace = connectedAccount?.google_email.endsWith("@mailmind.dev") ?? false;
-  const workspaceMode = isDemoWorkspace ? "Demo Inbox Mode" : connectedAccount ? "Real Gmail Mode" : "Setup Mode";
-  const workspaceModeCopy = isDemoWorkspace
-    ? "Synthetic emails for safe recruiter/user walkthroughs. No personal Gmail data is exposed."
-    : connectedAccount
-      ? "Real Gmail account connected through OAuth. Cleanup actions require explicit review."
-      : "Connect Gmail or seed demo data to start exploring MailMind.";
+  const workspaceMode = connectedAccount ? "Gmail connected" : "Setup";
+  const workspaceModeCopy = connectedAccount
+    ? "Your Gmail account is connected through OAuth. MailMind changes Gmail only when you explicitly approve an action."
+    : "Connect Gmail to start organizing your inbox.";
   const latestJob = syncJobsQuery.data?.[0];
   const syncIsActive = Boolean(latestJob && ["queued", "running", "retrying"].includes(latestJob.status));
   const summary = classificationSummaryQuery.data;
@@ -217,7 +214,7 @@ export function DashboardPage() {
       </header>
 
       <section className="mx-auto max-w-6xl px-6 pt-8">
-        <div className={`rounded-lg border p-4 ${isDemoWorkspace ? "border-amber-200 bg-amber-50" : connectedAccount ? "border-moss/20 bg-moss/10" : "border-slate-200 bg-white"}`}>
+        <div className={`rounded-lg border p-4 ${connectedAccount ? "border-moss/20 bg-moss/10" : "border-slate-200 bg-white"}`}>
           <p className="text-sm font-semibold text-ink">{workspaceMode}</p>
           <p className="mt-1 text-sm text-slate-600">{workspaceModeCopy}</p>
         </div>
@@ -229,11 +226,9 @@ export function DashboardPage() {
             {connectedAccount ? "Your inbox is ready" : "Connect your Gmail"}
           </h2>
           <p className="mt-3 text-slate-600">
-            {isDemoWorkspace
-              ? `${connectedAccount?.google_email} is a seeded demo inbox for safe walkthroughs.`
-              : connectedAccount
-                ? `Connected as ${connectedAccount.google_email}. MailMind reviews your inbox and only changes Gmail when you explicitly approve an action.`
-                : "Connect your Gmail to see priority emails, reply reminders, and cleanup suggestions."}
+            {connectedAccount
+              ? `Connected as ${connectedAccount.google_email}. MailMind reviews your inbox and only changes Gmail when you explicitly approve an action.`
+              : "Connect your Gmail to see priority emails, reply reminders, and cleanup suggestions."}
           </p>
           {(connectMutation.isError || syncMutation.isError || classifyMutation.isError) && (
             <p className="mt-4 rounded-lg bg-coral/10 px-4 py-3 text-sm text-coral">
@@ -245,11 +240,11 @@ export function DashboardPage() {
               <button
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 font-semibold text-white hover:bg-moss disabled:cursor-not-allowed disabled:opacity-60"
               type="button"
-              disabled={connectMutation.isPending || isDemoWorkspace}
+              disabled={connectMutation.isPending}
               onClick={() => connectMutation.mutate()}
             >
               <Mail size={18} aria-hidden />
-              {isDemoWorkspace ? "Demo Gmail seeded" : connectMutation.isPending ? "Opening Google..." : "Connect Gmail"}
+              {connectMutation.isPending ? "Opening Google..." : "Connect Gmail"}
               </button>
             )}
             {connectedAccount && (
@@ -266,25 +261,27 @@ export function DashboardPage() {
                 <button
                   className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-3 font-semibold text-ink hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                   type="button"
-                  disabled={syncMutation.isPending || isDemoWorkspace || syncIsActive}
+                  disabled={syncMutation.isPending || syncIsActive}
                   onClick={() => syncMutation.mutate({ accountId: connectedAccount.id, maxResults: syncLimit })}
                 >
                   <RefreshCw size={18} aria-hidden />
-                  {isDemoWorkspace ? "Sync disabled in demo" : syncIsActive ? "Sync already in progress" : syncMutation.isPending ? "Queueing sync..." : `Sync ${syncLimit} emails`}
+                  {syncIsActive ? "Sync already in progress" : syncMutation.isPending ? "Queueing sync..." : `Sync ${syncLimit} emails`}
                 </button>
               </div>
             )}
-            {connectedAccount && hasUnclassified && (
+            {connectedAccount && (
               <button
                 className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-3 font-semibold text-ink hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                 type="button"
                 disabled={classifyMutation.isPending}
-                onClick={() => classifyMutation.mutate()}
+                onClick={() => classifyMutation.mutate(!hasUnclassified)}
               >
                 <Brain size={18} aria-hidden />
                 {classifyMutation.isPending
                   ? "Classifying..."
-                  : `Classify ${summary?.total_unclassified} email${summary?.total_unclassified === 1 ? "" : "s"}`}
+                  : hasUnclassified
+                    ? `Classify ${summary?.total_unclassified} email${summary?.total_unclassified === 1 ? "" : "s"}`
+                    : "Refresh AI classifications"}
               </button>
             )}
           </div>

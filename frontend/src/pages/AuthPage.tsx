@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { ArrowLeft, Inbox, LogIn, PlayCircle, UserPlus } from "lucide-react";
+import { ArrowLeft, Inbox, LogIn, UserPlus } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -19,7 +19,6 @@ export function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const demoEnabled = import.meta.env.VITE_ENABLE_DEMO === "true";
 
   // useMutation hook for handling authentication (signup/login)
   const authMutation = useMutation({
@@ -44,14 +43,6 @@ export function AuthPage() {
       return;
     }
     authMutation.mutate({ mode, email, password, fullName });
-  }
-
-  function useDemoWorkspace() {
-    setMode("login");
-    setEmail("demo@mailmind.dev");
-    setPassword("DemoPass123!");
-    setFullName("");
-    authMutation.mutate({ mode: "login", email: "demo@mailmind.dev", password: "DemoPass123!" });
   }
 
   return (
@@ -194,15 +185,6 @@ export function AuthPage() {
             </button>
           )}
 
-          {demoEnabled && mode !== "forgot" && <button
-            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-5 py-3 font-semibold text-ink transition hover:border-moss hover:text-moss"
-            type="button"
-            disabled={authMutation.isPending}
-            onClick={useDemoWorkspace}
-          >
-            <PlayCircle size={18} aria-hidden />
-            Use demo workspace
-          </button>}
         </form>
       </section>
     </main>
