@@ -46,23 +46,24 @@ export function AuthPage() {
   }
 
   return (
-    <main className="grid min-h-screen bg-mint lg:grid-cols-[1fr_480px]">
-      <section className="flex items-center px-6 py-12 sm:px-10 lg:px-16">
+    <main className="grid min-h-screen bg-sky-50 lg:grid-cols-[1fr_480px]">
+      <section className="relative flex items-center overflow-hidden px-6 py-12 sm:px-10 lg:px-16">
+        <div className="absolute inset-y-0 left-0 w-2 bg-sky-600" aria-hidden />
         <div className="max-w-3xl">
-          <div className="mb-8 flex h-12 w-12 items-center justify-center rounded-lg bg-ink text-white">
+          <div className="mb-8 flex h-12 w-12 items-center justify-center rounded-lg bg-sky-700 text-white shadow-sm">
             <Inbox size={24} aria-hidden />
           </div>
           <h1 className="max-w-2xl text-5xl font-semibold tracking-normal text-ink sm:text-6xl">
             MailMind
           </h1>
-          <p className="mt-5 max-w-xl text-lg leading-8 text-ink/70">
+          <p className="mt-5 max-w-xl text-lg leading-8 text-slate-600">
             A production-minded AI inbox assistant for Gmail sync, classification, summaries,
             semantic search, and weekly email intelligence.
           </p>
         </div>
       </section>
 
-      <section className="flex items-center bg-white px-6 py-10 shadow-panel sm:px-10">
+      <section className="flex items-center border-l border-sky-100 bg-white px-6 py-10 shadow-panel sm:px-10">
         <form className="w-full" onSubmit={submit}>
           {mode !== "forgot" ? <div className="mb-8 inline-flex rounded-lg bg-slate-100 p-1">
             <button
@@ -161,7 +162,7 @@ export function AuthPage() {
           )}
 
           <button
-            className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-5 py-3 font-semibold text-white transition hover:bg-moss disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-sky-700 px-5 py-3 font-semibold text-white transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-60"
             type="submit"
             disabled={authMutation.isPending || resetRequestMutation.isPending}
           >
@@ -177,7 +178,7 @@ export function AuthPage() {
 
           {mode === "login" && (
             <button
-              className="mt-4 text-sm font-medium text-moss hover:text-ink"
+              className="mt-4 text-sm font-medium text-sky-700 hover:text-sky-900"
               type="button"
               onClick={() => setMode("forgot")}
             >

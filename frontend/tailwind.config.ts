@@ -5,14 +5,14 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: "#16201d",
-        moss: "#416555",
-        mint: "#dff6ec",
-        coral: "#ef6f61",
-        amber: "#f8c85f",
+        ink: "#172033",
+        moss: "#167a61",
+        mint: "#dff7ef",
+        coral: "#dc4c57",
+        amber: "#d99100",
       },
       boxShadow: {
-        panel: "0 18px 60px rgba(22, 32, 29, 0.12)",
+        panel: "0 16px 40px rgba(23, 32, 51, 0.10)",
       },
     },
   },

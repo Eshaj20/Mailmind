@@ -32,9 +32,17 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const PRIORITY_STYLES: Record<string, string> = {
-  high: "bg-coral/10 text-coral",
-  medium: "bg-amber-100 text-amber-700",
+  high: "bg-rose-100 text-rose-800",
+  medium: "bg-amber-100 text-amber-800",
   low: "bg-slate-100 text-slate-500",
+};
+
+const CATEGORY_STYLES: Record<string, string> = {
+  primary: "bg-sky-100 text-sky-800",
+  promotions: "bg-fuchsia-100 text-fuchsia-800",
+  social: "bg-indigo-100 text-indigo-800",
+  updates: "bg-teal-100 text-teal-800",
+  spam: "bg-rose-100 text-rose-800",
 };
 
 export function DashboardPage() {
@@ -154,9 +162,9 @@ export function DashboardPage() {
   });
   if (!hasToken) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-mint px-6">
+      <main className="flex min-h-screen items-center justify-center bg-sky-50 px-6">
         <section className="w-full max-w-xl rounded-lg bg-white p-8 shadow-panel">
-          <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-lg bg-ink text-white">
+          <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-lg bg-sky-700 text-white">
             <ShieldCheck size={24} aria-hidden />
           </div>
           <h1 className="text-3xl font-semibold text-ink">MailMind needs a workspace.</h1>
@@ -164,7 +172,7 @@ export function DashboardPage() {
             Create an account or login to begin the Gmail integration milestone.
           </p>
           <Link
-            className="mt-7 inline-flex rounded-lg bg-ink px-5 py-3 font-semibold text-white hover:bg-moss"
+            className="mt-7 inline-flex rounded-lg bg-sky-700 px-5 py-3 font-semibold text-white hover:bg-sky-800"
             to="/auth"
           >
             Continue
@@ -190,11 +198,11 @@ export function DashboardPage() {
   const evalCategoryF1 = evaluationReportQuery.data?.report_markdown.match(/Category[\s\S]*?Macro F1: ([0-9.]+)/)?.[1];
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="min-h-screen bg-[#f5f7fb]">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div>
-            <p className="text-sm font-medium text-moss">MailMind</p>
+            <p className="text-sm font-semibold text-sky-700">MailMind</p>
             <h1 className="text-2xl font-semibold text-ink">
               {meQuery.data?.full_name ?? meQuery.data?.email ?? "Inbox workspace"}
             </h1>
@@ -214,14 +222,14 @@ export function DashboardPage() {
       </header>
 
       <section className="mx-auto max-w-6xl px-6 pt-8">
-        <div className={`rounded-lg border p-4 ${connectedAccount ? "border-moss/20 bg-moss/10" : "border-slate-200 bg-white"}`}>
-          <p className="text-sm font-semibold text-ink">{workspaceMode}</p>
+        <div className={`rounded-lg border p-4 ${connectedAccount ? "border-emerald-200 bg-emerald-50" : "border-sky-200 bg-sky-50"}`}>
+          <p className={`text-sm font-semibold ${connectedAccount ? "text-emerald-800" : "text-sky-800"}`}>{workspaceMode}</p>
           <p className="mt-1 text-sm text-slate-600">{workspaceModeCopy}</p>
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-6 py-6">
-        <div className="rounded-lg border border-slate-200 bg-white p-6">
+        <div className="rounded-lg border border-sky-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-ink">
             {connectedAccount ? "Your inbox is ready" : "Connect your Gmail"}
           </h2>
@@ -238,7 +246,7 @@ export function DashboardPage() {
           <div className="mt-6 grid gap-3">
             {!connectedAccount && (
               <button
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 font-semibold text-white hover:bg-moss disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-sky-700 px-4 py-3 font-semibold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-60"
               type="button"
               disabled={connectMutation.isPending}
               onClick={() => connectMutation.mutate()}
@@ -259,7 +267,7 @@ export function DashboardPage() {
                   <option value={500}>500 per batch</option>
                 </select>
                 <button
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-3 font-semibold text-ink hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 font-semibold text-sky-900 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
                   type="button"
                   disabled={syncMutation.isPending || syncIsActive}
                   onClick={() => syncMutation.mutate({ accountId: connectedAccount.id, maxResults: syncLimit })}
@@ -271,7 +279,7 @@ export function DashboardPage() {
             )}
             {connectedAccount && (
               <button
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-3 font-semibold text-ink hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 font-semibold text-indigo-900 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
                 type="button"
                 disabled={classifyMutation.isPending}
                 onClick={() => classifyMutation.mutate(!hasUnclassified)}
@@ -286,14 +294,14 @@ export function DashboardPage() {
             )}
           </div>
           {latestJob && (
-            <div className="mt-5 rounded-lg border border-slate-200 p-4 text-sm">
-              <p className="font-semibold text-ink">Current sync: {latestJob.status}</p>
+            <div className="mt-5 rounded-lg border border-sky-100 bg-sky-50/60 p-4 text-sm">
+              <p className="font-semibold text-sky-950">Current sync: {latestJob.status}</p>
               <p className="mt-1 text-slate-500">
                 {latestJob.processed_count}/{latestJob.max_results} processed, {latestJob.created_count} created, {latestJob.updated_count} updated, attempt {latestJob.attempt_count}
                 /{latestJob.max_attempts}
               </p>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full rounded-full bg-moss" style={{ width: `${latestJob.progress_percent}%` }} />
+                <div className="h-full rounded-full bg-sky-600" style={{ width: `${latestJob.progress_percent}%` }} />
               </div>
               <p className="mt-1 text-xs text-slate-500">{latestJob.progress_percent}% complete</p>
               {latestJob.status === "queued" && (
@@ -327,28 +335,28 @@ export function DashboardPage() {
 
       {connectedAccount && inboxInsightsQuery.data && (
         <section className="mx-auto max-w-6xl px-6 pb-8">
-          <div className="rounded-lg border border-slate-200 bg-white p-6">
+          <div className="rounded-lg border border-amber-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-ink">Your inbox today</h2>
                 <p className="mt-1 text-sm text-slate-500">Start with messages that need attention, then review safe cleanup suggestions.</p>
               </div>
-              <div className="rounded-lg bg-ink px-5 py-4 text-center text-white">
+              <div className="rounded-lg bg-amber-500 px-5 py-4 text-center text-amber-950">
                 <p className="text-3xl font-semibold">{inboxInsightsQuery.data.score}</p>
-                <p className="text-xs uppercase tracking-wide text-white/70">Health score</p>
+                <p className="text-xs uppercase tracking-wide text-amber-950/70">Health score</p>
               </div>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-4">
-              <div className="rounded-lg border border-slate-200 p-4">
-                <p className="text-2xl font-semibold text-ink">{inboxInsightsQuery.data.unread_count}</p>
+              <div className="rounded-lg border border-sky-100 bg-sky-50 p-4">
+                <p className="text-2xl font-semibold text-sky-950">{inboxInsightsQuery.data.unread_count}</p>
                 <p className="text-sm text-slate-500">Unread</p>
               </div>
-              <div className="rounded-lg border border-slate-200 p-4">
-                <p className="text-2xl font-semibold text-ink">{inboxInsightsQuery.data.high_priority_unread_count}</p>
+              <div className="rounded-lg border border-rose-100 bg-rose-50 p-4">
+                <p className="text-2xl font-semibold text-rose-900">{inboxInsightsQuery.data.high_priority_unread_count}</p>
                 <p className="text-sm text-slate-500">Priority unread</p>
               </div>
-              <div className="rounded-lg border border-slate-200 p-4">
-                <p className="text-2xl font-semibold text-ink">{inboxInsightsQuery.data.pending_reply_count}</p>
+              <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-4">
+                <p className="text-2xl font-semibold text-indigo-950">{inboxInsightsQuery.data.pending_reply_count}</p>
                 <p className="text-sm text-slate-500">Need reply</p>
                 {inboxInsightsQuery.data.aged_follow_up_count > 0 && (
                   <p className="mt-1 text-xs text-coral">
@@ -356,18 +364,18 @@ export function DashboardPage() {
                   </p>
                 )}
               </div>
-              <div className="rounded-lg border border-slate-200 p-4">
-                <p className="text-2xl font-semibold text-ink">{inboxInsightsQuery.data.cleanup_candidate_count}</p>
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
+                <p className="text-2xl font-semibold text-emerald-950">{inboxInsightsQuery.data.cleanup_candidate_count}</p>
                 <p className="text-sm text-slate-500">Cleanup candidates</p>
               </div>
             </div>
             {inboxInsightsQuery.data.suggestions.length > 0 && (
               <div className="mt-5 grid gap-3 lg:grid-cols-3">
                 {inboxInsightsQuery.data.suggestions.slice(0, 2).map((suggestion) => (
-                  <div key={suggestion.suggestion_type} className="rounded-lg border border-slate-200 p-4">
+                  <div key={suggestion.suggestion_type} className="rounded-lg border border-amber-100 bg-amber-50/50 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <p className="font-semibold text-ink">{suggestion.title}</p>
-                      <span className="rounded-full bg-moss/10 px-2.5 py-1 text-xs font-medium text-moss">
+                      <span className="rounded-full bg-amber-200 px-2.5 py-1 text-xs font-medium text-amber-900">
                         {Math.round(suggestion.confidence * 100)}%
                       </span>
                     </div>
@@ -414,12 +422,12 @@ export function DashboardPage() {
       {connectedAccount && (cleanupPreviewQuery.data || (showAdvanced && Boolean(senderInsightsQuery.data?.length))) && (
         <section className="mx-auto grid max-w-6xl gap-6 px-6 pb-8 lg:grid-cols-2">
           {cleanupPreviewQuery.data && (
-            <div className="rounded-lg border border-slate-200 bg-white p-6">
+            <div className="rounded-lg border border-emerald-200 bg-white p-6 shadow-sm">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center justify-between gap-3">
                 <h2 className="text-xl font-semibold text-ink">Archive preview</h2>
-                <Link className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-moss" to="/cleanup">
+                <Link className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800" to="/cleanup">
                   Review cleanup
                 </Link>
               </div>
@@ -427,7 +435,7 @@ export function DashboardPage() {
                     {cleanupPreviewQuery.data.total_candidates} safe candidates before any Gmail action.
                   </p>
                 </div>
-                <span className="rounded-full bg-moss/10 px-3 py-1 text-sm font-medium text-moss">
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
                   {cleanupPreviewQuery.data.estimated_time_saved_minutes} min
                 </span>
               </div>
@@ -476,7 +484,7 @@ export function DashboardPage() {
       )}
       {connectedAccount && showAdvanced && summary && summary.total_classified > 0 && (
         <section className="mx-auto max-w-6xl px-6 pb-8">
-          <div className="rounded-lg border border-slate-200 bg-white p-6">
+          <div className="rounded-lg border border-cyan-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-ink">Classification details</h2>
               <p className="text-sm text-slate-500">
@@ -521,9 +529,9 @@ export function DashboardPage() {
                 <p className="mt-1 text-sm text-slate-500">Find emails by sender, subject, or what they are about.</p>
               </div>
               <div className="relative w-full sm:max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} aria-hidden />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-cyan-700" size={18} aria-hidden />
                 <input
-                  className="w-full rounded-lg border border-slate-200 py-3 pl-10 pr-3 text-sm outline-none focus:border-moss"
+                  className="w-full rounded-lg border border-cyan-200 bg-cyan-50/40 py-3 pl-10 pr-3 text-sm outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
                   placeholder="Search interview, bill, travel..."
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
@@ -539,7 +547,7 @@ export function DashboardPage() {
                         <p className="font-semibold text-ink">{result.email.subject ?? "No subject"}</p>
                         <p className="mt-1 text-sm text-slate-500">{result.email.sender ?? "Unknown sender"}</p>
                       </div>
-                      <span className="shrink-0 rounded-full bg-moss/10 px-2.5 py-1 text-xs font-medium text-moss">
+                      <span className="shrink-0 rounded-full bg-cyan-100 px-2.5 py-1 text-xs font-medium text-cyan-800">
                         {result.match_reason.replace(/_/g, " ")}
                       </span>
                     </div>
@@ -558,7 +566,7 @@ export function DashboardPage() {
 
       {connectedAccount && (
         <section className="mx-auto max-w-6xl px-6 pb-8">
-          <div className="rounded-lg border border-slate-200 bg-white p-6">
+          <div className="rounded-lg border border-indigo-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-semibold text-ink">Latest synced emails</h2>
             <div className="mt-4 grid gap-3 md:grid-cols-5">
               <select className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-moss" value={emailFilters.category} onChange={(event) => setEmailFilters({ ...emailFilters, category: event.target.value, offset: 0 })}>
@@ -604,7 +612,7 @@ export function DashboardPage() {
                             {email.priority}
                           </span>
                         )}
-                        <span className="rounded-full bg-moss/10 px-2.5 py-1 text-xs font-medium text-moss">
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${CATEGORY_STYLES[email.category] ?? "bg-slate-100 text-slate-600"}`}>
                           {CATEGORY_LABELS[email.category] ?? email.category}
                         </span>
                         {email.needs_reply && (
