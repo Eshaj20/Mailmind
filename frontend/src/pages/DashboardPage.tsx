@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Brain, LogOut, Mail, RefreshCw, Search, ShieldCheck, Sparkles } from "lucide-react";
+import { Brain, LogOut, Mail, RefreshCw, Search, ShieldCheck } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  applyCleanupAction,
   classifyEmails,
   clearToken,
   getAIUsageSummary,
@@ -22,17 +21,7 @@ import {
   getToken,
   queueGmailSync,
   searchEmails,
-  submitEmailFeedback,
-  undoCleanupAction,
 } from "../api/client";
-
-const milestones = [
-  { label: "Gmail sync", value: "Week 2", icon: Mail },
-  { label: "Sync engine", value: "Week 3", icon: RefreshCw },
-  { label: "AI classification", value: "Week 4", icon: Brain },
-  { label: "Hybrid search", value: "Week 5", icon: Search },
-  { label: "Inbox intelligence", value: "Week 6", icon: Sparkles },
-];
 
 const CATEGORY_LABELS: Record<string, string> = {
   primary: "Primary",
@@ -54,9 +43,8 @@ export function DashboardPage() {
   const hasToken = Boolean(getToken());
   const [searchQuery, setSearchQuery] = useState("");
   const [syncLimit, setSyncLimit] = useState(100);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [emailFilters, setEmailFilters] = useState({ category: "", priority: "", is_read: "", needs_reply: "", sender: "", offset: 0 });
-  const [selectedCleanupIds, setSelectedCleanupIds] = useState<number[]>([]);
-  const [lastCleanupActionIds, setLastCleanupActionIds] = useState<number[]>([]);
   const meQuery = useQuery({
     queryKey: ["me"],
     queryFn: getMe,
@@ -153,55 +141,6 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["sender-insights"] });
     },
   });
-  const cleanupActionMutation = useMutation({
-    mutationFn: ({ emailId, action }: { emailId: number; action: "archive" | "mark_read" }) =>
-      applyCleanupAction([emailId], action),
-    onSuccess: (data) => {
-      setLastCleanupActionIds(data.action_ids);
-      queryClient.invalidateQueries({ queryKey: ["emails"] });
-      queryClient.invalidateQueries({ queryKey: ["inbox-insights"] });
-      queryClient.invalidateQueries({ queryKey: ["cleanup-preview"] });
-      queryClient.invalidateQueries({ queryKey: ["sender-insights"] });
-    },
-  });
-  const bulkCleanupActionMutation = useMutation({
-    mutationFn: (action: "archive" | "mark_read") => applyCleanupAction(selectedCleanupIds, action),
-    onSuccess: (data) => {
-      setSelectedCleanupIds([]);
-      setLastCleanupActionIds(data.action_ids);
-      queryClient.invalidateQueries({ queryKey: ["emails"] });
-      queryClient.invalidateQueries({ queryKey: ["inbox-insights"] });
-      queryClient.invalidateQueries({ queryKey: ["cleanup-preview"] });
-      queryClient.invalidateQueries({ queryKey: ["sender-insights"] });
-    },
-  });
-  const undoCleanupMutation = useMutation({
-    mutationFn: async (actionIds: number[]) => Promise.all(actionIds.map((actionId) => undoCleanupAction(actionId))),
-    onSuccess: () => {
-      setLastCleanupActionIds([]);
-      queryClient.invalidateQueries({ queryKey: ["emails"] });
-      queryClient.invalidateQueries({ queryKey: ["inbox-insights"] });
-      queryClient.invalidateQueries({ queryKey: ["cleanup-preview"] });
-      queryClient.invalidateQueries({ queryKey: ["sender-insights"] });
-    },
-  });
-  const feedbackMutation = useMutation({
-    mutationFn: (emailId: number) =>
-      submitEmailFeedback({
-        email_id: emailId,
-        feedback_type: "not_cleanup",
-        corrected_category: "primary",
-        corrected_priority: "medium",
-        corrected_needs_reply: null,
-        note: "User marked this cleanup suggestion as not useful.",
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["classification-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["inbox-insights"] });
-      queryClient.invalidateQueries({ queryKey: ["cleanup-preview"] });
-      queryClient.invalidateQueries({ queryKey: ["sender-insights"] });
-    },
-  });
   const classifyMutation = useMutation({
     mutationFn: classifyEmails,
     onSuccess: () => {
@@ -244,6 +183,7 @@ export function DashboardPage() {
       ? "Real Gmail account connected through OAuth. Cleanup actions require explicit review."
       : "Connect Gmail or seed demo data to start exploring MailMind.";
   const latestJob = syncJobsQuery.data?.[0];
+  const syncIsActive = Boolean(latestJob && ["queued", "running", "retrying"].includes(latestJob.status));
   const summary = classificationSummaryQuery.data;
   const emailPage = emailsQuery.data;
   const cleanupPreviewItems = cleanupPreviewQuery.data?.items ?? [];
@@ -283,30 +223,17 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[1.2fr_0.8fr]">
+      <section className="mx-auto max-w-6xl px-6 py-6">
         <div className="rounded-lg border border-slate-200 bg-white p-6">
-          <h2 className="text-xl font-semibold text-ink">Week 4 AI layer</h2>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            {milestones.map((item) => (
-              <div key={item.label} className="rounded-lg border border-slate-200 p-4">
-                <item.icon className="text-moss" size={22} aria-hidden />
-                <p className="mt-3 font-semibold text-ink">{item.label}</p>
-                <p className="text-sm text-slate-500">{item.value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <aside className="rounded-lg border border-slate-200 bg-white p-6">
           <h2 className="text-xl font-semibold text-ink">
-            {connectedAccount ? "Gmail connected" : "Connect Gmail"}
+            {connectedAccount ? "Your inbox is ready" : "Connect your Gmail"}
           </h2>
           <p className="mt-3 text-slate-600">
             {isDemoWorkspace
               ? `${connectedAccount?.google_email} is a seeded demo inbox for safe walkthroughs.`
               : connectedAccount
-                ? `${connectedAccount.google_email} is ready for background re-sync jobs.`
-                : "Start Google OAuth, store the refresh token securely, and persist the first Gmail sync."}
+                ? `Connected as ${connectedAccount.google_email}. MailMind reviews your inbox and only changes Gmail when you explicitly approve an action.`
+                : "Connect your Gmail to see priority emails, reply reminders, and cleanup suggestions."}
           </p>
           {(connectMutation.isError || syncMutation.isError || classifyMutation.isError) && (
             <p className="mt-4 rounded-lg bg-coral/10 px-4 py-3 text-sm text-coral">
@@ -314,15 +241,17 @@ export function DashboardPage() {
             </p>
           )}
           <div className="mt-6 grid gap-3">
-            <button
+            {!connectedAccount && (
+              <button
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 font-semibold text-white hover:bg-moss disabled:cursor-not-allowed disabled:opacity-60"
               type="button"
               disabled={connectMutation.isPending || isDemoWorkspace}
               onClick={() => connectMutation.mutate()}
             >
               <Mail size={18} aria-hidden />
-              {isDemoWorkspace ? "Demo Gmail seeded" : connectedAccount ? "Reconnect Gmail" : connectMutation.isPending ? "Opening Google..." : "Connect Gmail"}
-            </button>
+              {isDemoWorkspace ? "Demo Gmail seeded" : connectMutation.isPending ? "Opening Google..." : "Connect Gmail"}
+              </button>
+            )}
             {connectedAccount && (
               <div className="grid gap-2">
                 <select
@@ -330,22 +259,22 @@ export function DashboardPage() {
                   value={syncLimit}
                   onChange={(event) => setSyncLimit(Number(event.target.value))}
                 >
-                  <option value={25}>25 emails</option>
-                  <option value={100}>100 emails</option>
-                  <option value={500}>500 emails</option>
+                  <option value={25}>25 per batch</option>
+                  <option value={100}>100 per batch</option>
+                  <option value={500}>500 per batch</option>
                 </select>
                 <button
                   className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-3 font-semibold text-ink hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                   type="button"
-                  disabled={syncMutation.isPending || isDemoWorkspace}
+                  disabled={syncMutation.isPending || isDemoWorkspace || syncIsActive}
                   onClick={() => syncMutation.mutate({ accountId: connectedAccount.id, maxResults: syncLimit })}
                 >
                   <RefreshCw size={18} aria-hidden />
-                  {isDemoWorkspace ? "Sync disabled in demo" : syncMutation.isPending ? "Queueing sync..." : `Queue ${syncLimit}-email sync`}
+                  {isDemoWorkspace ? "Sync disabled in demo" : syncIsActive ? "Sync already in progress" : syncMutation.isPending ? "Queueing sync..." : `Sync ${syncLimit} emails`}
                 </button>
               </div>
             )}
-            {connectedAccount && (
+            {connectedAccount && hasUnclassified && (
               <button
                 className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-3 font-semibold text-ink hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                 type="button"
@@ -355,15 +284,13 @@ export function DashboardPage() {
                 <Brain size={18} aria-hidden />
                 {classifyMutation.isPending
                   ? "Classifying..."
-                  : hasUnclassified
-                    ? `Classify ${summary?.total_unclassified} email${summary?.total_unclassified === 1 ? "" : "s"}`
-                    : "Run AI classification"}
+                  : `Classify ${summary?.total_unclassified} email${summary?.total_unclassified === 1 ? "" : "s"}`}
               </button>
             )}
           </div>
           {latestJob && (
             <div className="mt-5 rounded-lg border border-slate-200 p-4 text-sm">
-              <p className="font-semibold text-ink">Latest sync: {latestJob.status}</p>
+              <p className="font-semibold text-ink">Current sync: {latestJob.status}</p>
               <p className="mt-1 text-slate-500">
                 {latestJob.processed_count}/{latestJob.max_results} processed, {latestJob.created_count} created, {latestJob.updated_count} updated, attempt {latestJob.attempt_count}
                 /{latestJob.max_attempts}
@@ -372,22 +299,32 @@ export function DashboardPage() {
                 <div className="h-full rounded-full bg-moss" style={{ width: `${latestJob.progress_percent}%` }} />
               </div>
               <p className="mt-1 text-xs text-slate-500">{latestJob.progress_percent}% complete</p>
+              {latestJob.status === "queued" && (
+                <p className="mt-1 text-xs text-slate-500">Waiting for the background worker. The initial import runs in 25-email batches and refreshes automatically.</p>
+              )}
+              {latestJob.status === "running" && (
+                <p className="mt-1 text-xs text-slate-500">Importing this 25-email batch in the background. You can keep using the dashboard.</p>
+              )}
+              {latestJob.has_more && (
+                <p className="mt-1 text-xs text-slate-500">The next inbox batch will be queued automatically.</p>
+              )}
             </div>
           )}
-          {syncHealthQuery.data && (
+          {showAdvanced && syncHealthQuery.data && (
             <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
               <div className="rounded-lg border border-slate-200 p-3">
                 <p className="font-semibold text-ink">Sync health</p>
                 <p className="mt-1 text-slate-500">
-                  {syncHealthQuery.data.succeeded_jobs} succeeded, {syncHealthQuery.data.retrying_jobs} retrying, {syncHealthQuery.data.failed_jobs} failed
+                  {syncHealthQuery.data.succeeded_jobs} succeeded, {syncHealthQuery.data.queued_jobs + syncHealthQuery.data.running_jobs} active, {syncHealthQuery.data.retrying_jobs} retrying, {syncHealthQuery.data.failed_jobs} failed
                 </p>
               </div>
               <div className="rounded-lg border border-slate-200 p-3">
-                <p className="font-semibold text-ink">Average sync</p>
+                <p className="font-semibold text-ink">Average completed sync</p>
                 <p className="mt-1 text-slate-500">{syncHealthQuery.data.avg_synced_count} emails/job</p>
               </div>
             </div>
-          )}        </aside>
+          )}
+        </div>
       </section>
 
 
@@ -396,8 +333,8 @@ export function DashboardPage() {
           <div className="rounded-lg border border-slate-200 bg-white p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-ink">Inbox health</h2>
-                <p className="mt-1 text-sm text-slate-500">Formula-based score with cleanup recommendations.</p>
+                <h2 className="text-xl font-semibold text-ink">Your inbox today</h2>
+                <p className="mt-1 text-sm text-slate-500">Start with messages that need attention, then review safe cleanup suggestions.</p>
               </div>
               <div className="rounded-lg bg-ink px-5 py-4 text-center text-white">
                 <p className="text-3xl font-semibold">{inboxInsightsQuery.data.score}</p>
@@ -429,7 +366,7 @@ export function DashboardPage() {
             </div>
             {inboxInsightsQuery.data.suggestions.length > 0 && (
               <div className="mt-5 grid gap-3 lg:grid-cols-3">
-                {inboxInsightsQuery.data.suggestions.map((suggestion) => (
+                {inboxInsightsQuery.data.suggestions.slice(0, 2).map((suggestion) => (
                   <div key={suggestion.suggestion_type} className="rounded-lg border border-slate-200 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <p className="font-semibold text-ink">{suggestion.title}</p>
@@ -477,7 +414,7 @@ export function DashboardPage() {
       )}
 
 
-      {connectedAccount && (cleanupPreviewQuery.data || Boolean(senderInsightsQuery.data?.length)) && (
+      {connectedAccount && (cleanupPreviewQuery.data || (showAdvanced && Boolean(senderInsightsQuery.data?.length))) && (
         <section className="mx-auto grid max-w-6xl gap-6 px-6 pb-8 lg:grid-cols-2">
           {cleanupPreviewQuery.data && (
             <div className="rounded-lg border border-slate-200 bg-white p-6">
@@ -497,53 +434,8 @@ export function DashboardPage() {
                   {cleanupPreviewQuery.data.estimated_time_saved_minutes} min
                 </span>
               </div>
-              {cleanupPreviewItems.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                    type="button"
-                    onClick={() => setSelectedCleanupIds(visibleCleanupPreviewItems.map((item) => item.email.id))}
-                  >
-                    Select visible
-                  </button>
-                  <button
-                    className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-moss disabled:opacity-60"
-                    type="button"
-                    disabled={selectedCleanupIds.length === 0 || bulkCleanupActionMutation.isPending}
-                    onClick={() => bulkCleanupActionMutation.mutate("archive")}
-                  >
-                    Archive {selectedCleanupIds.length || "selected"}
-                  </button>
-                  <button
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                    type="button"
-                    disabled={selectedCleanupIds.length === 0 || bulkCleanupActionMutation.isPending}
-                    onClick={() => bulkCleanupActionMutation.mutate("mark_read")}
-                  >
-                    Mark read
-                  </button>
-                </div>
-              )}
-              {lastCleanupActionIds.length > 0 && (
-                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm font-medium text-ink">
-                      Last cleanup changed {lastCleanupActionIds.length} email
-                      {lastCleanupActionIds.length === 1 ? "" : "s"}.
-                    </p>
-                    <button
-                      className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-moss disabled:opacity-60"
-                      type="button"
-                      disabled={undoCleanupMutation.isPending}
-                      onClick={() => undoCleanupMutation.mutate(lastCleanupActionIds)}
-                    >
-                      {undoCleanupMutation.isPending ? "Undoing..." : "Undo last cleanup"}
-                    </button>
-                  </div>
-                </div>
-              )}
               <div className="mt-5 space-y-3">
-                {visibleCleanupPreviewItems.map((item) => (
+                {visibleCleanupPreviewItems.slice(0, 3).map((item) => (
                   <div key={item.email.id} className="rounded-lg border border-slate-100 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -555,39 +447,13 @@ export function DashboardPage() {
                       </span>
                     </div>
                     <p className="mt-2 text-xs text-slate-500">{item.reason}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-moss disabled:opacity-60"
-                        type="button"
-                        disabled={cleanupActionMutation.isPending}
-                        onClick={() => cleanupActionMutation.mutate({ emailId: item.email.id, action: "archive" })}
-                      >
-                        Archive
-                      </button>
-                      <button
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                        type="button"
-                        disabled={cleanupActionMutation.isPending}
-                        onClick={() => cleanupActionMutation.mutate({ emailId: item.email.id, action: "mark_read" })}
-                      >
-                        Mark read
-                      </button>
-                      <button
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-50 disabled:opacity-60"
-                        type="button"
-                        disabled={feedbackMutation.isPending}
-                        onClick={() => feedbackMutation.mutate(item.email.id)}
-                      >
-                        Not cleanup
-                      </button>
-                    </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {Boolean(senderInsightsQuery.data?.length) && (
+          {showAdvanced && Boolean(senderInsightsQuery.data?.length) && (
             <div className="rounded-lg border border-slate-200 bg-white p-6">
               <h2 className="text-xl font-semibold text-ink">Sender intelligence</h2>
               <div className="mt-5 space-y-3">
@@ -611,11 +477,11 @@ export function DashboardPage() {
           )}
         </section>
       )}
-      {connectedAccount && summary && summary.total_classified > 0 && (
+      {connectedAccount && showAdvanced && summary && summary.total_classified > 0 && (
         <section className="mx-auto max-w-6xl px-6 pb-8">
           <div className="rounded-lg border border-slate-200 bg-white p-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-ink">Inbox intelligence</h2>
+              <h2 className="text-xl font-semibold text-ink">Classification details</h2>
               <p className="text-sm text-slate-500">
                 {summary.total_classified} classified
                 {summary.total_unclassified > 0 ? `, ${summary.total_unclassified} pending` : ""}
@@ -623,7 +489,7 @@ export function DashboardPage() {
             </div>
             {(evalSampleSize || evalCategoryF1) && (
               <div className="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                Eval set: {evalSampleSize ?? "-"} emails | Category macro F1: {evalCategoryF1 ?? "-"}
+                Evaluation baseline: {evalSampleSize ?? "-"} synthetic emails | Category macro F1: {evalCategoryF1 ?? "-"}
               </div>
             )}
             <div className="mt-5 grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
@@ -654,8 +520,8 @@ export function DashboardPage() {
           <div className="rounded-lg border border-slate-200 bg-white p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-ink">Hybrid search</h2>
-                <p className="mt-1 text-sm text-slate-500">Keyword + semantic ranking merged with RRF.</p>
+                <h2 className="text-xl font-semibold text-ink">Search your inbox</h2>
+                <p className="mt-1 text-sm text-slate-500">Find emails by sender, subject, or what they are about.</p>
               </div>
               <div className="relative w-full sm:max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} aria-hidden />
@@ -681,10 +547,7 @@ export function DashboardPage() {
                       </span>
                     </div>
                     <p className="mt-2 text-sm text-slate-600">{result.email.snippet}</p>
-                    <p className="mt-2 text-xs text-slate-400">
-                      RRF {result.rrf_score.toFixed(4)} - keyword #{result.keyword_rank ?? "-"} - semantic #
-                      {result.vector_rank ?? "-"}
-                    </p>
+                    <p className="mt-2 text-xs text-slate-400">Matched by {result.match_reason.replace(/_/g, " ")}.</p>
                   </div>
                 ))}
                 {searchResultsQuery.data && searchResultsQuery.data.results.length === 0 && (
@@ -780,7 +643,20 @@ export function DashboardPage() {
             </div>
           </div>
         </section>
-      )}      {connectedAccount && Boolean(threadsQuery.data?.length) && (
+      )}
+      {connectedAccount && (
+        <section className="mx-auto max-w-6xl px-6 pb-8">
+          <button
+            className="text-sm font-semibold text-slate-600 hover:text-ink"
+            type="button"
+            aria-expanded={showAdvanced}
+            onClick={() => setShowAdvanced((current) => !current)}
+          >
+            {showAdvanced ? "Hide advanced inbox details" : "Show advanced inbox details"}
+          </button>
+        </section>
+      )}
+      {connectedAccount && showAdvanced && Boolean(threadsQuery.data?.length) && (
         <section className="mx-auto max-w-6xl px-6 pb-8">
           <div className="rounded-lg border border-slate-200 bg-white p-6">
             <h2 className="text-xl font-semibold text-ink">Thread summaries</h2>

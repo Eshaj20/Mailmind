@@ -78,6 +78,14 @@ export function CleanupReviewPage() {
   const selectedVisibleIds = selectedIds.filter((id) => visibleItems.some((item) => item.email.id === id));
   const allVisibleSelected = visibleItems.length > 0 && selectedVisibleIds.length === visibleItems.length;
 
+  function confirmCleanup(action: CleanupAction) {
+    const actionLabel = action === "archive" ? "archive" : "mark as read";
+    const emailLabel = selectedVisibleIds.length === 1 ? "email" : "emails";
+    if (window.confirm(`This will ${actionLabel} ${selectedVisibleIds.length} selected ${emailLabel} in Gmail. You can undo it from this screen. Continue?`)) {
+      cleanupMutation.mutate(action);
+    }
+  }
+
   const cleanupMutation = useMutation({
     mutationFn: (action: CleanupAction) => applyCleanupAction(selectedVisibleIds, action),
     onSuccess: (data) => {
@@ -234,7 +242,7 @@ export function CleanupReviewPage() {
                 className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-2 text-sm font-semibold text-white hover:bg-moss disabled:opacity-60"
                 type="button"
                 disabled={selectedCount === 0 || cleanupMutation.isPending}
-                onClick={() => cleanupMutation.mutate("archive")}
+                onClick={() => confirmCleanup("archive")}
               >
                 <Archive size={16} aria-hidden />
                 Archive selected
@@ -243,7 +251,7 @@ export function CleanupReviewPage() {
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                 type="button"
                 disabled={selectedCount === 0 || cleanupMutation.isPending}
-                onClick={() => cleanupMutation.mutate("mark_read")}
+                onClick={() => confirmCleanup("mark_read")}
               >
                 <Check size={16} aria-hidden />
                 Mark read
