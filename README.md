@@ -14,12 +14,25 @@ delete email.
 - **AI:** deterministic rules for obvious messages, structured LLM classification when configured, and a local fallback when it is unavailable.
 - **Search:** PostgreSQL full-text + vector similarity, merged with Reciprocal Rank Fusion (RRF).
 
+## Product Flow
+
+1. Create a MailMind account and connect Gmail through OAuth.
+2. The API creates a sync job; Celery imports messages in the background.
+3. MailMind classifies inbox items, highlights high-priority attention items, and builds a searchable local inbox index.
+4. The user searches, reviews recommendations, and explicitly confirms any Gmail cleanup action.
+
 ## Architecture
 
-```text
-React frontend -> FastAPI API -> PostgreSQL + Redis
-                                  |
-                              Celery worker -> Gmail API / optional LLM
+```mermaid
+flowchart LR
+  U[User] --> FE[React + TypeScript]
+  FE --> API[FastAPI REST API]
+  API --> DB[(PostgreSQL + pgvector)]
+  API --> R[(Redis)]
+  R --> W[Celery worker]
+  W <--> G[Gmail API]
+  W --> DB
+  API -. optional .-> LLM[OpenAI-compatible LLM]
 ```
 
 ### Reliability Decisions
@@ -28,6 +41,51 @@ React frontend -> FastAPI API -> PostgreSQL + Redis
 - `historyId` fetches incremental Gmail changes after the first sync.
 - `UNIQUE(gmail_account_id, gmail_message_id)` plus upsert makes repeated syncs idempotent.
 - Cleanup actions require explicit user review and have audit/undo support.
+
+## AI And Search Without An API Key
+
+MailMind works without an OpenAI key. The default pipeline is local and
+deterministic:
+
+```text
+Email sender + subject + preview
+            |
+            v
+Trusted security rules -> keyword/sender scoring -> local fallback
+            |                    |
+            v                    v
+   Primary / High          category, priority, reply signal
+            |
+            v
+PostgreSQL full-text + deterministic vector similarity -> RRF -> ranked search
+```
+
+- **Rules and keyword scoring:** fast, explainable triage for promotions,
+  receipts, deadlines, interview requests, and trusted Google account-security
+  alerts.
+- **Security override:** a genuine Google account-security alert is classified
+  as `Primary / High`; an unknown sender saying “security alert” is not trusted
+  automatically.
+- **Local fallback:** if no LLM key is configured, a lightweight local scorer
+  still returns category, priority, reply signal, confidence, and rationale.
+- **Hybrid retrieval:** PostgreSQL full-text handles exact terms, while local
+  deterministic 64-dimensional vectors add similarity signals. Reciprocal Rank
+  Fusion merges both ranked lists.
+- **Optional LLM:** an OpenAI-compatible structured JSON classification stage
+  runs only when the owner explicitly configures `OPENAI_API_KEY`.
+
+The local vector approach is reproducible and free, but it is not a trained
+semantic embedding model. A future fully local upgrade can use a bundled
+sentence-transformer model when offline model storage and CPU/RAM budget are
+acceptable.
+
+## Deployment Status
+
+- **Self-hosted:** supported now through Docker Compose; it is the stable,
+  no-card option for a single machine or private installation.
+- **Public SaaS:** requires an always-on host for FastAPI, Celery, Redis, and
+  PostgreSQL. A Cloudflare Quick Tunnel is appropriate only for a short live
+  demo because its URL and uptime depend on the local computer.
 
 ## Run Locally
 
