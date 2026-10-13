@@ -3,9 +3,8 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 # Import application modules after setting up the environment
-from app.api.deps import get_db, get_gmail_client, get_llm_client
+from app.api.deps import get_db, get_gmail_client, get_llm_client, get_sync_queue
 from app.models.ai_usage import AIUsageLog
-from app.api.deps import get_gmail_client, get_llm_client
 from app.models.gmail import Email, EmailThread
 from app.services.classification import (
     LLMClient,
@@ -14,6 +13,7 @@ from app.services.classification import (
     classify_unclassified_emails,
 )
 from app.services.evaluation import evaluate_classifier
+from app.services.sync_jobs import process_sync_job
 
 # --- Fixtures and helpers ------------------------------------------------------
 class FakeGmailClientForClassification:
@@ -27,6 +27,10 @@ class FakeGmailClientForClassification:
     # Mock the exchange_code and fetch_profile methods to return test data
     def exchange_code(self, code: str):
         return {"access_token": "test-access-token", "refresh_token": "test-refresh-token", "scope": "openid"}
+
+    def refresh_access_token(self, refresh_token: str) -> str:
+        assert refresh_token == "test-refresh-token"
+        return "refreshed-access-token"
 
     # Mock the fetch_profile and fetch_latest_messages methods to return test data
     def fetch_profile(self, access_token: str):
@@ -105,15 +109,27 @@ def _auth_headers(client):
     assert login.status_code == 200
     return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
-# Helper function to simulate connecting a Gmail account for the test user
+# Keep OAuth callback tests async, then invoke the service directly to simulate a worker.
+class FakeSyncQueue:
+    def enqueue(self, sync_job_id: int) -> str:
+        return f"fake-task-{sync_job_id}"
+
+
 def _connect_gmail(client):
     from app.services.gmail import create_oauth_state
 
+    client.app.dependency_overrides[get_sync_queue] = lambda: FakeSyncQueue()
     state = create_oauth_state(user_id=1)
     callback = client.post("/api/v1/gmail/oauth/callback", json={"code": "oauth-code", "state": state})
-    assert callback.status_code == 200
-    return callback
+    assert callback.status_code == 202
 
+    db = next(client.app.dependency_overrides[get_db]())
+    process_sync_job(
+        db,
+        callback.json()["sync_job"]["id"],
+        client=client.app.dependency_overrides[get_gmail_client](),
+    )
+    return callback
 
 # --- Rule engine unit tests -------------------------------------------------
 

@@ -13,10 +13,22 @@ class Settings(BaseSettings):
     secret_key: str = Field(default="change-me-in-production", min_length=16)
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24
+    password_reset_token_expire_minutes: int = 30
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     google_client_id: str = ""
     google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:8000/api/v1/gmail/oauth/callback"
+    frontend_app_url: str = "http://localhost:5173"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_starttls: bool = True
+    # Optional invite-only guard for a controlled real-user beta. Leave empty for
+    # unrestricted signup; use a comma-separated list of normalized email addresses.
+    beta_allowed_emails: str = ""
+    oauth_state_expire_minutes: int = 10
     gmail_scopes: str = "openid email profile https://www.googleapis.com/auth/gmail.modify"
     gmail_initial_sync_max_results: int = 25
     gmail_sync_query: str = "newer_than:30d"
@@ -24,6 +36,8 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://redis:6379/0"
     celery_result_backend: str = "redis://redis:6379/1"
     sync_job_max_attempts: int = 3
+    sync_retry_base_seconds: int = 5
+    sync_retry_max_seconds: int = 300
     api_rate_limit_per_minute: int = 120
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
@@ -70,6 +84,14 @@ class Settings(BaseSettings):
     @property
     def gmail_scope_list(self) -> list[str]:
         return [scope.strip() for scope in self.gmail_scopes.split() if scope.strip()]
+
+    @property
+    def beta_allowed_email_set(self) -> set[str]:
+        return {
+            email.strip().lower()
+            for email in self.beta_allowed_emails.split(",")
+            if email.strip()
+        }
 
 
 @lru_cache

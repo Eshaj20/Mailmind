@@ -2,13 +2,34 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
-from app.api.deps import get_gmail_client, get_sync_queue
+from app.api.deps import get_db, get_gmail_client, get_sync_queue
 from app.models.cleanup_action import CleanupActionLog
 from app.models.feedback import EmailFeedback
 from app.models.gmail import Email, GmailAccount
 from app.models.sync_job import SyncJob
-from app.services.gmail import GmailMessage, GmailMessageBatch, TransientGmailSyncError, create_oauth_state
-from app.services.sync_jobs import create_sync_job, process_sync_job
+from app.services.gmail import (
+    GmailMessage,
+    GmailMessageBatch,
+    GmailPageBatch,
+    TransientGmailSyncError,
+    create_oauth_state,
+    parse_oauth_redirect_uri,
+    redact_sensitive_preview,
+)
+
+
+def test_oauth_state_preserves_signed_beta_callback_uri():
+    callback_uri = "https://mailmind-beta.trycloudflare.com/api/v1/gmail/oauth/callback"
+    state = create_oauth_state(user_id=1, redirect_uri=callback_uri)
+
+    assert parse_oauth_redirect_uri(state) == callback_uri
+
+
+def test_redact_sensitive_preview_removes_reset_token():
+    preview = "Reset here: https://mailmind.example/#/reset-password?token=secret_token-123"
+
+    assert redact_sensitive_preview(preview) == "Reset here: [secure reset link removed]"
+from app.services.sync_jobs import create_continuation_sync_job, create_sync_job, process_sync_job
 from app.services.sync_queue import SyncQueueUnavailableError
 
 # This test file contains tests for the Gmail integration endpoints of the FastAPI application, including OAuth flow, email synchronization, and handling of transient errors during sync jobs.
@@ -32,7 +53,7 @@ class FakeGmailClient:
 
     # Simulates fetching the user's Gmail profile, returning a predefined email address and history ID for testing purposes.
     def fetch_profile(self, access_token: str):
-        return {"emailAddress": "esha.gmail@example.com", "historyId": "history-1"}
+        return {"emailAddress": "esha.gmail@example.com", "historyId": "history-3"}
 
     # Simulates fetching the latest Gmail messages, returning a predefined list of GmailMessage objects for testing purposes.
     def fetch_latest_messages(self, access_token: str, max_results: int):
@@ -124,6 +145,42 @@ class ManyMessagesGmailClient(FakeGmailClient):
             for index in range(500)
         ]
 
+class PagedGmailClient(FakeGmailClient):
+    def fetch_latest_message_batch(
+        self,
+        access_token: str,
+        max_results: int,
+        page_token: str | None = None,
+    ) -> GmailPageBatch:
+        messages = super().fetch_latest_messages(access_token, max_results=2)
+        if page_token is None:
+            return GmailPageBatch(messages=[messages[0]], next_page_token="page-2")
+        assert page_token == "page-2"
+        return GmailPageBatch(messages=[messages[1]], next_page_token=None)
+
+class PagedHistoryGmailClient(FakeGmailClient):
+    def fetch_history_message_batch(
+        self,
+        access_token: str,
+        start_history_id: str,
+        max_results: int,
+        page_token: str | None = None,
+    ) -> GmailMessageBatch:
+        assert start_history_id == "history-3"
+        messages = super().fetch_latest_messages(access_token, max_results=2)
+        if page_token is None:
+            return GmailMessageBatch(
+                messages=[messages[0]],
+                history_id="history-5",
+                next_page_token="history-page-2",
+            )
+        assert page_token == "history-page-2"
+        return GmailMessageBatch(
+            messages=[messages[1]],
+            history_id="history-5",
+            next_page_token=None,
+        )
+
 class FailingGmailClient(FakeGmailClient):
     def refresh_access_token(self, refresh_token: str) -> str:
         raise TransientGmailSyncError("temporary timeout")
@@ -159,16 +216,30 @@ def _auth_headers(client):
 
 # A fake Gmail client that simulates fetching messages for classification, returning a predefined set of messages for testing purposes.
 def _connect_gmail(client):
+    queue_override = client.app.dependency_overrides.get(get_sync_queue)
+    fake_queue = queue_override() if queue_override else FakeSyncQueue()
+    if queue_override is None:
+        client.app.dependency_overrides[get_sync_queue] = lambda: fake_queue
+
     state = create_oauth_state(user_id=1)
     callback = client.post(
         "/api/v1/gmail/oauth/callback",
         json={"code": "oauth-code", "state": state},
     )
-    assert callback.status_code == 200
-    return callback
+    assert callback.status_code == 202
 
+    db = next(client.app.dependency_overrides[get_db]())
+    gmail_factory = client.app.dependency_overrides[get_gmail_client]
+    process_sync_job(
+        db,
+        callback.json()["sync_job"]["id"],
+        client=gmail_factory(),
+    )
+    if hasattr(fake_queue, "enqueued"):
+        fake_queue.enqueued.clear()
+    return callback
 # Test that the Gmail OAuth callback endpoint correctly persists the first sync and behaves idempotently on subsequent calls, ensuring that duplicate syncs do not create additional records.
-def test_gmail_oauth_callback_persists_first_sync_idempotently(client):
+def test_gmail_oauth_callback_queues_baseline_sync(client, db_session):
     client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
     headers = _auth_headers(client)
 
@@ -176,15 +247,14 @@ def test_gmail_oauth_callback_persists_first_sync_idempotently(client):
     assert authorize.status_code == 200
     assert "accounts.google.test" in authorize.json()["authorization_url"]
 
-    first_callback = _connect_gmail(client)
-    assert first_callback.json()["created_count"] == 2
-    assert first_callback.json()["updated_count"] == 0
-    assert first_callback.json()["account"]["google_email"] == "esha.gmail@example.com"
+    callback = _connect_gmail(client)
+    assert callback.json()["account"]["google_email"] == "esha.gmail@example.com"
+    assert callback.json()["sync_job"]["status"] == "queued"
 
-    second_callback = _connect_gmail(client)
-    assert second_callback.status_code == 200
-    assert second_callback.json()["created_count"] == 0
-    assert second_callback.json()["updated_count"] == 2
+    job = db_session.get(SyncJob, callback.json()["sync_job"]["id"])
+    assert job.status == "succeeded"
+    assert job.created_count == 2
+    assert job.updated_count == 0
 
     accounts = client.get("/api/v1/gmail/accounts", headers=headers)
     assert accounts.status_code == 200
@@ -196,7 +266,6 @@ def test_gmail_oauth_callback_persists_first_sync_idempotently(client):
     assert payload["total"] == 2
     assert len(payload["items"]) == 2
     assert payload["items"][0]["subject"] == "Electricity bill"
-
 # Test that the Gmail sync endpoint correctly queues a sync job and returns the expected response, verifying that the job is enqueued in the fake sync queue.
 def test_gmail_sync_endpoint_queues_job(client):
     fake_queue = FakeSyncQueue()
@@ -215,14 +284,14 @@ def test_gmail_sync_endpoint_queues_job(client):
 
     jobs = client.get("/api/v1/gmail/sync/jobs", headers=headers)
     assert jobs.status_code == 200
-    assert len(jobs.json()) == 1
+    assert len(jobs.json()) == 2
 
 # Test that the Gmail sync endpoint records a failed job when the queue broker is unavailable.
 def test_gmail_sync_endpoint_marks_job_failed_when_queue_unavailable(client, db_session):
     client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
-    client.app.dependency_overrides[get_sync_queue] = lambda: FailingSyncQueue()
     headers = _auth_headers(client)
     _connect_gmail(client)
+    client.app.dependency_overrides[get_sync_queue] = lambda: FailingSyncQueue()
 
     response = client.post("/api/v1/gmail/sync", headers=headers)
 
@@ -231,7 +300,6 @@ def test_gmail_sync_endpoint_marks_job_failed_when_queue_unavailable(client, db_
     job = db_session.scalar(select(SyncJob).order_by(SyncJob.id.desc()))
     assert job.status == "failed"
     assert job.error_type == "queue_unavailable"
-
 def test_process_sync_job_uses_history_id_incrementally(client, db_session):
     client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
     headers = _auth_headers(client)
@@ -477,14 +545,21 @@ def test_large_scale_initial_sync_remains_idempotent_for_500_messages(client, db
     _auth_headers(client)
 
     first_callback = _connect_gmail(client)
+    first_job = db_session.get(SyncJob, first_callback.json()["sync_job"]["id"])
+    assert first_job.created_count == 500
+    assert first_job.updated_count == 0
+
+    account = db_session.scalar(select(GmailAccount))
+    account.initial_sync_complete = False
+    account.history_id = None
+    account.sync_start_history_id = None
+    db_session.commit()
+
     second_callback = _connect_gmail(client)
-
-    assert first_callback.json()["created_count"] == 500
-    assert first_callback.json()["updated_count"] == 0
-    assert second_callback.json()["created_count"] == 0
-    assert second_callback.json()["updated_count"] == 500
+    second_job = db_session.get(SyncJob, second_callback.json()["sync_job"]["id"])
+    assert second_job.created_count == 0
+    assert second_job.updated_count == 500
     assert len(list(db_session.scalars(select(Email)))) == 500
-
 
 def test_email_filters_and_pagination_return_scoped_page(client, db_session):
     client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
@@ -525,7 +600,7 @@ def test_sync_health_summarizes_job_statuses(client, db_session):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["total_jobs"] == 2
+    assert payload["total_jobs"] == 3
     assert payload["queued_jobs"] == 1
     assert payload["retrying_jobs"] == 1
     assert payload["error_counts"]["transient_gmail_error"] == 1
@@ -657,3 +732,92 @@ def test_cleanup_action_undo_is_single_use(client):
 
     assert client.post(f"/api/v1/gmail/cleanup/actions/{action_id}/undo", headers=headers).status_code == 200
     assert client.post(f"/api/v1/gmail/cleanup/actions/{action_id}/undo", headers=headers).status_code == 404
+
+def test_baseline_sync_resumes_from_saved_page_token(client, db_session):
+    client.app.dependency_overrides[get_gmail_client] = lambda: PagedGmailClient()
+    _auth_headers(client)
+
+    callback = _connect_gmail(client)
+    first_job = db_session.get(SyncJob, callback.json()["sync_job"]["id"])
+    account = db_session.scalar(select(GmailAccount))
+
+    assert first_job.status == "succeeded"
+    assert first_job.has_more is True
+    assert account.initial_sync_complete is False
+    assert account.sync_page_token == "page-2"
+    assert account.history_id is None
+
+    continuation = create_continuation_sync_job(db_session, first_job)
+    assert continuation is not None
+    assert create_continuation_sync_job(db_session, first_job).id == continuation.id
+
+    processed = process_sync_job(db_session, continuation.id, client=PagedGmailClient())
+    db_session.refresh(account)
+
+    assert processed.status == "succeeded"
+    assert processed.has_more is False
+    assert account.initial_sync_complete is True
+    assert account.sync_page_token is None
+    assert account.history_id == "history-3"
+    assert len(list(db_session.scalars(select(Email)))) == 2
+
+
+def test_sync_endpoint_rejects_second_active_job(client):
+    fake_queue = FakeSyncQueue()
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    client.app.dependency_overrides[get_sync_queue] = lambda: fake_queue
+    headers = _auth_headers(client)
+    _connect_gmail(client)
+
+    first = client.post("/api/v1/gmail/sync", headers=headers)
+    second = client.post("/api/v1/gmail/sync", headers=headers)
+
+    assert first.status_code == 202
+    assert second.status_code == 409
+    assert f"Sync job {first.json()['id']} is already queued" == second.json()["detail"]
+
+
+def test_oauth_get_callback_redirects_to_frontend(client):
+    fake_queue = FakeSyncQueue()
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    client.app.dependency_overrides[get_sync_queue] = lambda: fake_queue
+    _auth_headers(client)
+    state = create_oauth_state(user_id=1)
+
+    response = client.get(
+        f"/api/v1/gmail/oauth/callback?code=oauth-code&state={state}",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("http://localhost:5173/#/?gmail=connected")
+    assert "sync_job_id=" in response.headers["location"]
+
+
+def test_incremental_sync_resumes_before_advancing_history_cursor(client, db_session):
+    client.app.dependency_overrides[get_gmail_client] = lambda: FakeGmailClient()
+    _auth_headers(client)
+    _connect_gmail(client)
+    account = db_session.scalar(select(GmailAccount))
+    assert account.initial_sync_complete is True
+    assert account.history_id == "history-3"
+
+    first_job = create_sync_job(db_session, account.user, account, max_results=1)
+    db_session.commit()
+    first = process_sync_job(db_session, first_job.id, client=PagedHistoryGmailClient())
+    db_session.refresh(account)
+
+    assert first.status == "succeeded", first.error_message
+    assert first.has_more is True
+    assert account.history_id == "history-3"
+    assert account.sync_start_history_id == "history-3"
+    assert account.sync_page_token == "history-page-2"
+
+    continuation = create_continuation_sync_job(db_session, first)
+    second = process_sync_job(db_session, continuation.id, client=PagedHistoryGmailClient())
+    db_session.refresh(account)
+
+    assert second.has_more is False
+    assert account.history_id == "history-5"
+    assert account.sync_start_history_id is None
+    assert account.sync_page_token is None

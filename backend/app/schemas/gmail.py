@@ -31,6 +31,7 @@ class GmailAccountRead(BaseModel):
     id: int
     google_email: str
     history_id: str | None
+    initial_sync_complete: bool
     sync_status: str
     last_synced_at: datetime | None
 
@@ -221,13 +222,6 @@ class ThreadRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class GmailSyncResult(BaseModel):
-    account: GmailAccountRead
-    synced_count: int
-    created_count: int
-    updated_count: int
-
-
 
 class SyncHealthRead(BaseModel):
     total_jobs: int
@@ -255,6 +249,8 @@ class SyncJobRead(BaseModel):
     synced_count: int
     created_count: int
     updated_count: int
+    has_more: bool
+    continuation_job_id: int | None
     celery_task_id: str | None
     error_type: str | None
     error_message: str | None
@@ -264,6 +260,12 @@ class SyncJobRead(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
+class GmailSyncResult(BaseModel):
+    """OAuth connection result with the asynchronous baseline sync job."""
+
+    account: GmailAccountRead
+    sync_job: SyncJobRead
 
 
 

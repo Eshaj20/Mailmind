@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
@@ -47,13 +48,13 @@ from app.services.gmail import (
     PermanentGmailSyncError,
     TransientGmailSyncError,
     create_oauth_state,
+    parse_oauth_redirect_uri,
     parse_oauth_state,
-    sync_latest_messages,
     upsert_gmail_account,
 )
 from app.services.intelligence import build_cleanup_preview, build_inbox_health, build_sender_intelligence
 from app.services.search import hybrid_search_emails
-from app.services.sync_jobs import create_sync_job
+from app.services.sync_jobs import create_sync_job, get_active_sync_job
 from app.services.sync_queue import SyncJobQueue, SyncQueueUnavailableError
 from app.services.usage import build_ai_usage_summary
 
@@ -74,34 +75,56 @@ def _ensure_google_configured() -> None:
         )
 
 
+def _beta_callback_uri(request: Request) -> str | None:
+    """Use the current Quick Tunnel host without changing normal production config."""
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    host = host.split(",", maxsplit=1)[0].strip().lower()
+    if not host.endswith(".trycloudflare.com"):
+        return None
+    return f"https://{host}{settings.api_v1_prefix}/gmail/oauth/callback"
+
+
 @router.get("/oauth/authorize", response_model=GmailOAuthUrl)
 def oauth_authorize(
+    request: Request,
     current_user: User = Depends(get_current_user),
     client: GmailClient = Depends(get_gmail_client),
 ) -> GmailOAuthUrl:
     _ensure_google_configured()
-    state = create_oauth_state(current_user.id)
+    callback_uri = _beta_callback_uri(request)
+    state = create_oauth_state(current_user.id, redirect_uri=callback_uri)
+    if callback_uri:
+        return GmailOAuthUrl(
+            authorization_url=client.authorization_url(state, redirect_uri=callback_uri)
+        )
     return GmailOAuthUrl(authorization_url=client.authorization_url(state))
 
 
 # GET supports Google's browser redirect; POST keeps the same flow easy to test from API clients.
-@router.get("/oauth/callback", response_model=GmailSyncResult)
+@router.get("/oauth/callback", response_class=RedirectResponse)
 def oauth_callback_get(
     code: str = Query(min_length=1),
     state: str = Query(min_length=1),
     db: Session = Depends(get_db),
     client: GmailClient = Depends(get_gmail_client),
-) -> GmailSyncResult:
-    return _handle_oauth_callback(code=code, state=state, db=db, client=client)
+    queue: SyncJobQueue = Depends(get_sync_queue),
+) -> RedirectResponse:
+    result = _handle_oauth_callback(code=code, state=state, db=db, client=client, queue=queue)
+    target = (
+        f"{settings.frontend_app_url.rstrip('/')}/#/?gmail=connected"
+        f"&sync_job_id={result.sync_job.id}"
+    )
+    return RedirectResponse(url=target, status_code=status.HTTP_303_SEE_OTHER)
 
 
-@router.post("/oauth/callback", response_model=GmailSyncResult)
+@router.post("/oauth/callback", response_model=GmailSyncResult, status_code=status.HTTP_202_ACCEPTED)
 def oauth_callback_post(
     payload: GmailOAuthCallback,
     db: Session = Depends(get_db),
     client: GmailClient = Depends(get_gmail_client),
+    queue: SyncJobQueue = Depends(get_sync_queue),
 ) -> GmailSyncResult:
-    return _handle_oauth_callback(code=payload.code, state=payload.state, db=db, client=client)
+    return _handle_oauth_callback(code=payload.code, state=payload.state, db=db, client=client, queue=queue)
 
 
 @router.get("/accounts", response_model=list[GmailAccountRead])
@@ -128,6 +151,13 @@ def queue_sync(
     account = db.scalar(query)
     if account is None:
         raise HTTPException(status_code=404, detail="Gmail account not connected")
+
+    active_job = get_active_sync_job(db, account.id)
+    if active_job is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Sync job {active_job.id} is already {active_job.status}",
+        )
 
     job = create_sync_job(db, current_user, account, max_results=max_results)
     db.commit()
@@ -180,7 +210,12 @@ def get_sync_health(
 
     latest = max(jobs, key=lambda job: job.created_at, default=None)
     last_success = max((job.finished_at for job in jobs if job.status == "succeeded" and job.finished_at), default=None)
-    avg_synced_count = round(sum(job.synced_count for job in jobs) / len(jobs), 2) if jobs else 0.0
+    completed_jobs = [job for job in jobs if job.status == "succeeded"]
+    avg_synced_count = (
+        round(sum(job.synced_count for job in completed_jobs) / len(completed_jobs), 2)
+        if completed_jobs
+        else 0.0
+    )
     return SyncHealthRead(
         total_jobs=len(jobs),
         queued_jobs=status_counts.get("queued", 0),
@@ -549,9 +584,11 @@ def _handle_oauth_callback(
     state: str,
     db: Session,
     client: GmailClient,
+    queue: SyncJobQueue,
 ) -> GmailSyncResult:
     try:
         user_id = parse_oauth_state(state)
+        callback_uri = parse_oauth_redirect_uri(state)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid OAuth state") from exc
 
@@ -559,7 +596,10 @@ def _handle_oauth_callback(
     if user is None:
         raise HTTPException(status_code=404, detail="OAuth user not found")
 
-    token_response = client.exchange_code(code)
+    if callback_uri:
+        token_response = client.exchange_code(code, redirect_uri=callback_uri)
+    else:
+        token_response = client.exchange_code(code)
     access_token = token_response.get("access_token")
     if not access_token:
         raise HTTPException(status_code=502, detail="Google did not return an access token")
@@ -585,15 +625,45 @@ def _handle_oauth_callback(
         google_email=google_email,
         refresh_token=refresh_token,
         scopes=str(token_response.get("scope", "")).split() or settings.gmail_scope_list,
-        history_id=str(profile.get("historyId")) if profile.get("historyId") else None,
+        # A new account must complete its bounded baseline sync before it can
+        # use Gmail history as an incremental cursor.
+        history_id=None,
     )
+    if not account.initial_sync_complete and profile.get("historyId"):
+        account.sync_start_history_id = str(profile["historyId"])
     db.flush()
 
-    messages = client.fetch_latest_messages(
-        access_token,
+    active_job = get_active_sync_job(db, account.id)
+    if active_job is not None:
+        db.commit()
+        db.refresh(account)
+        return GmailSyncResult(account=account, sync_job=active_job)
+
+    job = create_sync_job(
+        db,
+        user,
+        account,
         max_results=settings.gmail_initial_sync_max_results,
     )
-    stats = sync_latest_messages(db=db, user=user, account=account, messages=messages)
     db.commit()
     db.refresh(account)
-    return GmailSyncResult(account=account, **stats.__dict__)
+    db.refresh(job)
+
+    try:
+        celery_task_id = queue.enqueue(job.id)
+    except SyncQueueUnavailableError as exc:
+        job.status = "failed"
+        job.error_type = "queue_unavailable"
+        job.error_message = str(exc)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Gmail sync worker queue is unavailable",
+        ) from exc
+
+    if celery_task_id:
+        job.celery_task_id = celery_task_id
+        db.commit()
+        db.refresh(job)
+
+    return GmailSyncResult(account=account, sync_job=job)

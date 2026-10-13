@@ -100,7 +100,7 @@ Optional query parameter for `POST /gmail/sync`:
 | Query | Meaning |
 | --- | --- |
 | `account_id` | Sync one connected Gmail account; otherwise uses the user's first matching account. |
-| `max_results` | Optional per-job Gmail fetch limit from 1 to 12000 for staged real-inbox testing. |
+| `max_results` | Per-job page size from 1 to 12000. Initial and large incremental imports queue continuation jobs until all available pages are checkpointed. |
 
 Sync job fields:
 
@@ -113,6 +113,8 @@ Sync job fields:
 | `synced_count` | Gmail messages processed. |
 | `created_count` | New email rows inserted. |
 | `updated_count` | Existing email rows updated by idempotent upsert. |
+| `has_more` | Whether Gmail returned another page that requires an automatic continuation job. |
+| `continuation_job_id` | Follow-up job id, when one was created for the next checkpointed page. |
 | `error_type` / `error_message` | Observability fields for debugging Gmail/API failures. |
 
 Sync health response includes job counts by status, latest status, last successful sync time, average synced count, and error counts grouped by error type.

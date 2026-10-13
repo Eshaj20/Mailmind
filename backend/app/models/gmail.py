@@ -16,6 +16,9 @@ class GmailAccount(Base):
     refresh_token_ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
     scopes: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     history_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    initial_sync_complete: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    sync_page_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sync_start_history_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     sync_status: Mapped[str] = mapped_column(String(32), default="connected", nullable=False)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

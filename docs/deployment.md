@@ -20,6 +20,8 @@ For the real-user deployment path, use:
 | PostgreSQL | Supabase, Neon, Render Postgres, or Railway Postgres | Must support `CREATE EXTENSION vector`. |
 | Redis | Upstash, Render Redis, or Railway Redis | Used by Celery queue. |
 
+For a controlled beta without a payment card, use [No-card real-user beta](no-card-production-beta.md). It keeps the frontend public on Vercel and exposes the locally hosted backend through a Cloudflare HTTPS tunnel.
+
 ## Backend Environment
 
 Use `.env.production.example` as the backend template.

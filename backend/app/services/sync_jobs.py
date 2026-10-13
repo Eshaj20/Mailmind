@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 import logging
 import time
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -18,14 +19,48 @@ from app.services.gmail import (
 
 logger = logging.getLogger(__name__)
 
-# Define constants for the various statuses a sync job can have, including queued, running, retrying, succeeded, and failed. These constants are used to track the state of sync jobs in the database and provide meaningful status updates during the synchronization process.
 SYNC_STATUS_QUEUED = "queued"
 SYNC_STATUS_RUNNING = "running"
 SYNC_STATUS_RETRYING = "retrying"
 SYNC_STATUS_SUCCEEDED = "succeeded"
 SYNC_STATUS_FAILED = "failed"
+ACTIVE_SYNC_STATUSES = {SYNC_STATUS_QUEUED, SYNC_STATUS_RUNNING, SYNC_STATUS_RETRYING}
 
-# Create a new sync job in the database for a given user and Gmail account, initializing it with the queued status and setting the maximum number of attempts based on application settings. The function returns the newly created SyncJob instance.
+def get_active_sync_job(db: Session, account_id: int) -> SyncJob | None:
+    return db.scalar(
+        select(SyncJob)
+        .where(
+            SyncJob.gmail_account_id == account_id,
+            SyncJob.status.in_(ACTIVE_SYNC_STATUSES),
+        )
+        .order_by(SyncJob.created_at.desc(), SyncJob.id.desc())
+    )
+
+
+def create_continuation_sync_job(db: Session, completed_job: SyncJob) -> SyncJob | None:
+    """Create at most one follow-up job for the next Gmail page."""
+    if not completed_job.has_more:
+        return None
+    if completed_job.continuation_job_id:
+        return db.get(SyncJob, completed_job.continuation_job_id)
+
+    account = db.get(GmailAccount, completed_job.gmail_account_id)
+    user = db.get(User, completed_job.user_id)
+    if account is None or user is None:
+        return None
+
+    next_job = create_sync_job(
+        db,
+        user,
+        account,
+        max_results=completed_job.max_results,
+    )
+    db.flush()
+    completed_job.continuation_job_id = next_job.id
+    db.commit()
+    db.refresh(next_job)
+    return next_job
+
 def create_sync_job(db: Session, user: User, account: GmailAccount, max_results: int | None = None) -> SyncJob:
     job = SyncJob(
         user_id=user.id,
@@ -39,16 +74,20 @@ def create_sync_job(db: Session, user: User, account: GmailAccount, max_results:
     db.flush()
     return job
 
-# Process a sync job by retrieving it from the database, updating its status to running, and attempting to synchronize the associated Gmail account. The function handles transient and permanent errors, updating the job's status and error information accordingly. It returns the updated SyncJob instance after processing.
 def process_sync_job(
     db: Session,
     sync_job_id: int,
     client: GmailClient | None = None,
     raise_for_retry: bool = False,
 ) -> SyncJob:
-    job = db.get(SyncJob, sync_job_id)
+    job = db.scalar(
+        select(SyncJob).where(SyncJob.id == sync_job_id).with_for_update()
+    )
     if job is None:
         raise ValueError(f"Sync job {sync_job_id} was not found")
+
+    if job.status == SYNC_STATUS_SUCCEEDED:
+        return job
 
     account = db.get(GmailAccount, job.gmail_account_id)
     user = db.get(User, job.user_id)
@@ -78,7 +117,7 @@ def process_sync_job(
         },
     )
 
-# Attempt to synchronize the Gmail account associated with the sync job, handling any transient or permanent errors that may occur. The function updates the sync job's status and error information based on the outcome of the synchronization attempt, and returns the updated SyncJob instance.
+    # Gmail calls happen after the durable job state is visible as running.
     try:
         stats = sync_gmail_account(
             db=db,
@@ -109,6 +148,7 @@ def _mark_succeeded(db: Session, job: SyncJob, stats: GmailSyncStats, started: f
     job.processed_count = stats.synced_count
     job.created_count = stats.created_count
     job.updated_count = stats.updated_count
+    job.has_more = stats.has_more
     job.finished_at = datetime.now(UTC)
     duration_ms = int((time.perf_counter() - started) * 1000)
     logger.info(

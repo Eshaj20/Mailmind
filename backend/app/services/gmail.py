@@ -1,7 +1,8 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 import logging
+import re
 from typing import Any
 from urllib.parse import urlencode
 
@@ -25,6 +26,18 @@ PERMANENT_STATUS_CODES = {400, 401, 403, 404}
 
 logger = logging.getLogger(__name__)
 
+# Inbox previews are also used in search, classification, and summaries. Never
+# persist a usable password-reset token received by the connected Gmail inbox.
+_PASSWORD_RESET_LINK_PATTERN = re.compile(
+    r"https?://[^\s\"'<>]+/#/reset-password\?token=[A-Za-z0-9_-]+"
+)
+
+
+def redact_sensitive_preview(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return _PASSWORD_RESET_LINK_PATTERN.sub("[secure reset link removed]", value)
+
 
 @dataclass(frozen=True)
 class GmailMessage:
@@ -44,6 +57,12 @@ class GmailMessage:
 class GmailMessageBatch:
     messages: list[GmailMessage]
     history_id: str | None
+    next_page_token: str | None = None
+
+@dataclass(frozen=True)
+class GmailPageBatch:
+    messages: list[GmailMessage]
+    next_page_token: str | None
 
 
 @dataclass(frozen=True)
@@ -51,6 +70,7 @@ class GmailSyncStats:
     synced_count: int
     created_count: int
     updated_count: int
+    has_more: bool = False
 
 
 class GmailSyncError(Exception):
@@ -65,12 +85,30 @@ class PermanentGmailSyncError(GmailSyncError):
     error_type = "permanent_gmail_error"
 
 
-def create_oauth_state(user_id: int) -> str:
-    payload = {"sub": str(user_id), "purpose": OAUTH_STATE_PURPOSE}
+def create_oauth_state(user_id: int, redirect_uri: str | None = None) -> str:
+    payload = {
+        "sub": str(user_id),
+        "purpose": OAUTH_STATE_PURPOSE,
+        "exp": datetime.now(UTC) + timedelta(minutes=settings.oauth_state_expire_minutes),
+    }
+    if redirect_uri:
+        payload["redirect_uri"] = redirect_uri
     return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
 
 
 def parse_oauth_state(state: str) -> int:
+    payload = _decode_oauth_state(state)
+    return int(payload["sub"])
+
+
+def parse_oauth_redirect_uri(state: str) -> str | None:
+    """Return a signed beta callback URI, when an OAuth state carries one."""
+    payload = _decode_oauth_state(state)
+    redirect_uri = payload.get("redirect_uri")
+    return redirect_uri if isinstance(redirect_uri, str) else None
+
+
+def _decode_oauth_state(state: str) -> dict[str, Any]:
     try:
         payload = jwt.decode(state, settings.secret_key, algorithms=[settings.jwt_algorithm])
     except JWTError as exc:
@@ -78,17 +116,17 @@ def parse_oauth_state(state: str) -> int:
 
     if payload.get("purpose") != OAUTH_STATE_PURPOSE or not payload.get("sub"):
         raise ValueError("Invalid OAuth state")
-    return int(payload["sub"])
+    return payload
 
 
 class GmailClient:
     def __init__(self, config: Settings = settings) -> None:
         self.config = config
 
-    def authorization_url(self, state: str) -> str:
+    def authorization_url(self, state: str, redirect_uri: str | None = None) -> str:
         params = {
             "client_id": self.config.google_client_id,
-            "redirect_uri": self.config.google_redirect_uri,
+            "redirect_uri": redirect_uri or self.config.google_redirect_uri,
             "response_type": "code",
             "scope": " ".join(self.config.gmail_scope_list),
             "access_type": "offline",
@@ -97,7 +135,7 @@ class GmailClient:
         }
         return f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
 
-    def exchange_code(self, code: str) -> dict[str, Any]:
+    def exchange_code(self, code: str, redirect_uri: str | None = None) -> dict[str, Any]:
         try:
             response = httpx.post(
                 GOOGLE_TOKEN_URL,
@@ -105,7 +143,7 @@ class GmailClient:
                     "code": code,
                     "client_id": self.config.google_client_id,
                     "client_secret": self.config.google_client_secret,
-                    "redirect_uri": self.config.google_redirect_uri,
+                    "redirect_uri": redirect_uri or self.config.google_redirect_uri,
                     "grant_type": "authorization_code",
                 },
                 timeout=15,
@@ -144,93 +182,126 @@ class GmailClient:
         except Exception as exc:
             raise classify_gmail_exception(exc) from exc
 
-    def fetch_latest_messages(self, access_token: str, max_results: int) -> list[GmailMessage]:
+    def fetch_latest_message_batch(
+        self,
+        access_token: str,
+        max_results: int,
+        page_token: str | None = None,
+    ) -> GmailPageBatch:
+        """Fetch one baseline page so the worker can checkpoint between jobs."""
         try:
-            message_refs: list[dict[str, str]] = []
-            seen_ids: set[str] = set()
-            page_token: str | None = None
-            remaining = max_results
+            params: dict[str, Any] = {"maxResults": min(500, max_results)}
+            if self.config.gmail_sync_query.strip():
+                params["q"] = self.config.gmail_sync_query.strip()
+            if page_token:
+                params["pageToken"] = page_token
 
-            while remaining > 0:
-                params: dict[str, Any] = {"maxResults": min(500, remaining)}
-                if self.config.gmail_sync_query.strip():
-                    params["q"] = self.config.gmail_sync_query.strip()
-                if page_token:
-                    params["pageToken"] = page_token
+            response = httpx.get(
+                f"{GMAIL_API_BASE}/messages",
+                headers={"Authorization": f"Bearer {access_token}"},
+                params=params,
+                timeout=15,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            message_ids = [
+                item["id"]
+                for item in payload.get("messages", [])
+                if item.get("id")
+            ]
+            return GmailPageBatch(
+                messages=[self.fetch_message(access_token, message_id) for message_id in message_ids],
+                next_page_token=payload.get("nextPageToken"),
+            )
+        except GmailSyncError:
+            raise
+        except Exception as exc:
+            raise classify_gmail_exception(exc) from exc
 
-                list_response = httpx.get(
-                    f"{GMAIL_API_BASE}/messages",
-                    headers={"Authorization": f"Bearer {access_token}"},
-                    params=params,
-                    timeout=15,
-                )
-                list_response.raise_for_status()
-                payload = list_response.json()
-                for item in payload.get("messages", []):
-                    message_id = item.get("id")
-                    if message_id and message_id not in seen_ids:
-                        message_refs.append(item)
-                        seen_ids.add(message_id)
-                        remaining -= 1
-                        if remaining <= 0:
-                            break
+    def fetch_latest_messages(self, access_token: str, max_results: int) -> list[GmailMessage]:
+        """Fetch up to max_results messages across Gmail list pages."""
+        messages: list[GmailMessage] = []
+        page_token: str | None = None
+        seen_ids: set[str] = set()
+        while len(messages) < max_results:
+            batch = self.fetch_latest_message_batch(
+                access_token,
+                max_results=max_results - len(messages),
+                page_token=page_token,
+            )
+            for message in batch.messages:
+                if message.gmail_message_id not in seen_ids:
+                    messages.append(message)
+                    seen_ids.add(message.gmail_message_id)
+            page_token = batch.next_page_token
+            if not page_token or not batch.messages:
+                break
+        return messages[:max_results]
 
-                page_token = payload.get("nextPageToken")
-                if not page_token:
-                    break
+    def fetch_history_message_batch(
+        self,
+        access_token: str,
+        start_history_id: str,
+        max_results: int,
+        page_token: str | None = None,
+    ) -> GmailMessageBatch:
+        """Fetch one history page so incremental sync can resume safely."""
+        try:
+            params: dict[str, Any] = {
+                "startHistoryId": start_history_id,
+                "historyTypes": "messageAdded",
+                "maxResults": min(500, max_results),
+            }
+            if page_token:
+                params["pageToken"] = page_token
 
-            return [self.fetch_message(access_token, item["id"]) for item in message_refs]
+            response = httpx.get(
+                f"{GMAIL_API_BASE}/history",
+                headers={"Authorization": f"Bearer {access_token}"},
+                params=params,
+                timeout=15,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            message_ids: list[str] = []
+            for history in payload.get("history", []):
+                for added in history.get("messagesAdded", []):
+                    message_id = added.get("message", {}).get("id")
+                    if message_id and message_id not in message_ids:
+                        message_ids.append(message_id)
+
+            return GmailMessageBatch(
+                messages=[self.fetch_message(access_token, message_id) for message_id in message_ids],
+                history_id=str(payload["historyId"]) if payload.get("historyId") else None,
+                next_page_token=payload.get("nextPageToken"),
+            )
         except GmailSyncError:
             raise
         except Exception as exc:
             raise classify_gmail_exception(exc) from exc
 
     def fetch_history_messages(self, access_token: str, start_history_id: str, max_results: int) -> GmailMessageBatch:
-        try:
-            message_ids: list[str] = []
-            page_token: str | None = None
-            latest_history_id: str | None = None
-
-            while len(message_ids) < max_results:
-                params = {
-                    "startHistoryId": start_history_id,
-                    "historyTypes": "messageAdded",
-                    "maxResults": min(500, max_results - len(message_ids)),
-                }
-                if page_token:
-                    params["pageToken"] = page_token
-
-                response = httpx.get(
-                    f"{GMAIL_API_BASE}/history",
-                    headers={"Authorization": f"Bearer {access_token}"},
-                    params=params,
-                    timeout=15,
-                )
-                response.raise_for_status()
-                payload = response.json()
-                latest_history_id = str(payload.get("historyId")) if payload.get("historyId") else latest_history_id
-                for history in payload.get("history", []):
-                    for added in history.get("messagesAdded", []):
-                        message_id = added.get("message", {}).get("id")
-                        if message_id and message_id not in message_ids:
-                            message_ids.append(message_id)
-                            if len(message_ids) >= max_results:
-                                break
-                    if len(message_ids) >= max_results:
-                        break
-
-                page_token = payload.get("nextPageToken")
-                if not page_token:
-                    break
-
-            return GmailMessageBatch(
-                messages=[self.fetch_message(access_token, message_id) for message_id in message_ids],
-                history_id=latest_history_id,
+        """Compatibility helper that aggregates history pages up to max_results."""
+        messages: list[GmailMessage] = []
+        page_token: str | None = None
+        latest_history_id: str | None = None
+        seen_ids: set[str] = set()
+        while len(messages) < max_results:
+            batch = self.fetch_history_message_batch(
+                access_token,
+                start_history_id,
+                max_results=max_results - len(messages),
+                page_token=page_token,
             )
-        except GmailSyncError:
-            raise
-        except Exception as exc:
-            raise classify_gmail_exception(exc) from exc
+            for message in batch.messages:
+                if message.gmail_message_id not in seen_ids:
+                    messages.append(message)
+                    seen_ids.add(message.gmail_message_id)
+            latest_history_id = batch.history_id or latest_history_id
+            page_token = batch.next_page_token
+            if not page_token:
+                break
+        return GmailMessageBatch(messages=messages[:max_results], history_id=latest_history_id)
 
     def fetch_message(self, access_token: str, message_id: str) -> GmailMessage:
         try:
@@ -287,6 +358,7 @@ def parse_gmail_message(payload: dict[str, Any]) -> GmailMessage:
     }
     labels = payload.get("labelIds", []) or []
     received_at = _parse_received_at(headers.get("date"), payload.get("internalDate"))
+    preview = redact_sensitive_preview(payload.get("snippet"))
     return GmailMessage(
         gmail_message_id=payload["id"],
         gmail_thread_id=payload.get("threadId", payload["id"]),
@@ -294,8 +366,8 @@ def parse_gmail_message(payload: dict[str, Any]) -> GmailMessage:
         sender=headers.get("from"),
         recipients=headers.get("to"),
         subject=headers.get("subject"),
-        snippet=payload.get("snippet"),
-        body_preview=payload.get("snippet"),
+        snippet=preview,
+        body_preview=preview,
         labels=labels,
         received_at=received_at,
     )
@@ -349,6 +421,8 @@ def sync_latest_messages(
     user: User,
     account: GmailAccount,
     messages: list[GmailMessage],
+    *,
+    advance_history_id: bool = True,
 ) -> GmailSyncStats:
     created_count = 0
     updated_count = 0
@@ -420,7 +494,8 @@ def sync_latest_messages(
             },
         )
 
-    account.history_id = latest_history_id
+    if advance_history_id:
+        account.history_id = latest_history_id
     account.last_synced_at = datetime.now(UTC)
     account.sync_status = "synced"
     db.flush()
@@ -440,20 +515,102 @@ def sync_gmail_account(
 ) -> GmailSyncStats:
     refresh_token = decrypt_value(account.refresh_token_ciphertext)
     access_token = client.refresh_access_token(refresh_token)
-    if account.history_id:
+
+    if account.initial_sync_complete and account.history_id:
         logger.info(
             "sync.gmail_history_fetch.started",
             extra={"user_id": user.id, "gmail_account_id": account.id, "history_id": account.history_id},
         )
+        if hasattr(client, "fetch_history_message_batch"):
+            start_history_id = account.sync_start_history_id or account.history_id
+            account.sync_start_history_id = start_history_id
+            batch = client.fetch_history_message_batch(
+                access_token,
+                start_history_id,
+                max_results=max_results,
+                page_token=account.sync_page_token,
+            )
+            stats = sync_latest_messages(
+                db,
+                user,
+                account,
+                batch.messages,
+                advance_history_id=False,
+            )
+            account.sync_page_token = batch.next_page_token
+            has_more = bool(batch.next_page_token)
+            if has_more:
+                account.sync_status = "syncing"
+            else:
+                account.history_id = batch.history_id or start_history_id
+                account.sync_start_history_id = None
+                account.sync_page_token = None
+            return GmailSyncStats(
+                synced_count=stats.synced_count,
+                created_count=stats.created_count,
+                updated_count=stats.updated_count,
+                has_more=has_more,
+            )
+
         batch = client.fetch_history_messages(access_token, account.history_id, max_results=max_results)
         stats = sync_latest_messages(db, user, account, batch.messages)
         if batch.history_id:
             account.history_id = batch.history_id
         return stats
 
-    logger.info("sync.gmail_initial_fetch.started", extra={"user_id": user.id, "gmail_account_id": account.id})
-    messages = client.fetch_latest_messages(access_token, max_results=max_results)
-    return sync_latest_messages(db, user, account, messages)
+    logger.info(
+        "sync.gmail_baseline_page.started",
+        extra={
+            "user_id": user.id,
+            "gmail_account_id": account.id,
+            "has_page_token": bool(account.sync_page_token),
+            "max_results": max_results,
+        },
+    )
+
+    # Capture a history cursor before the baseline. Incremental sync starts
+    # there after paging and catches mail that arrived during the backfill.
+    if not account.sync_start_history_id:
+        profile = client.fetch_profile(access_token)
+        if profile.get("historyId"):
+            account.sync_start_history_id = str(profile["historyId"])
+
+    if hasattr(client, "fetch_latest_message_batch"):
+        page = client.fetch_latest_message_batch(
+            access_token,
+            max_results=max_results,
+            page_token=account.sync_page_token,
+        )
+        stats = sync_latest_messages(
+            db,
+            user,
+            account,
+            page.messages,
+            advance_history_id=False,
+        )
+        account.sync_page_token = page.next_page_token
+        has_more = bool(page.next_page_token)
+        if has_more:
+            account.sync_status = "syncing"
+    else:
+        # Compatibility path for custom adapters; production GmailClient uses
+        # page-level checkpoints.
+        messages = client.fetch_latest_messages(access_token, max_results=max_results)
+        stats = sync_latest_messages(db, user, account, messages)
+        has_more = False
+
+    if not has_more:
+        account.initial_sync_complete = True
+        account.sync_page_token = None
+        account.history_id = account.sync_start_history_id or account.history_id
+        account.sync_start_history_id = None
+
+    return GmailSyncStats(
+        synced_count=stats.synced_count,
+        created_count=stats.created_count,
+        updated_count=stats.updated_count,
+        has_more=has_more,
+    )
 
 
 def sync_account_with_refresh_token(
