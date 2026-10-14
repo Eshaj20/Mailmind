@@ -5,11 +5,14 @@ account, syncs messages in the background, classifies and searches the inbox,
 and suggests safe cleanup actions for user review. It does not automatically
 delete email.
 
-## Demo
+## Product Demo
 
-![MailMind product preview](docs/assets/mailmind-demo-trimmed.gif)
+<p align="center">
+  <img src="docs/assets/mailmind-demo-trimmed.gif" alt="MailMind product preview" width="900" />
+</p>
 
-A full live product demo is coming soon.
+> [!IMPORTANT]
+> **Full live walkthrough coming soon.** It will cover Gmail connection, background sync, AI classification, hybrid search, and safe cleanup review end to end.
 
 ## Proof Of Work
 
