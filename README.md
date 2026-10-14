@@ -5,6 +5,12 @@ account, syncs messages in the background, classifies and searches the inbox,
 and suggests safe cleanup actions for user review. It does not automatically
 delete email.
 
+## Demo
+
+![MailMind product preview](docs/assets/mailmind-demo-trimmed.gif)
+
+A full live product demo is coming soon.
+
 ## Proof Of Work
 
 - **Frontend:** React, TypeScript, React Query, responsive dashboard and cleanup review.
